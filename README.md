@@ -1,6 +1,6 @@
 # vision
 
-画像をスクリーンセーバーのように表示するWebアプリ。
+Cloudflare R2に保存した画像を、スクリーンセーバーのように5秒ごとにランダム表示するWebアプリ。
 
 Vercelへのデプロイを前提とした、Next.js App Router + TypeScript構成のプロジェクトです。
 
@@ -8,6 +8,12 @@ Vercelへのデプロイを前提とした、Next.js App Router + TypeScript構�
 
 ```bash
 npm install
+Copy-Item .env.example .env.local
+```
+
+`.env.local` にCloudflare R2の接続情報を設定してから起動します。
+
+```bash
 npm run dev
 ```
 
@@ -18,7 +24,11 @@ npm run dev
 ```text
 src/
   app/
+    api/images/route.ts            R2の画像一覧と一時URLを返すAPI
     globals.css                   全体のスタイル
     layout.tsx                    共通レイアウト
     page.tsx                      トップページ
+    slideshow.tsx                 5秒ごとのランダム表示
 ```
+
+R2バケットが未設定または空の場合は、画面中央に `vision` と表示します。
