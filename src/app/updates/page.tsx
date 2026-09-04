@@ -10,7 +10,15 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.015</h1>
+        <h1 className="updates-title">v0.016</h1>
+
+        <section className="updates-entry">
+          <h2>v0.016</h2>
+          <ul>
+            <li>縦長画像の高さが設定値を超える表示不具合を修正</li>
+            <li>画像の向きにかかわらず長辺が設定範囲内に収まるよう修正</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.015</h2>
