@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.022</h1>
+        <h1 className="updates-title">v0.023</h1>
+
+        <section className="updates-entry">
+          <h2>v0.023</h2>
+          <ul>
+            <li>保存済み画像を一覧表示する画像管理ページを追加</li>
+            <li>選択した画像を確認後に削除できる機能を追加</li>
+            <li>トップページに画像管理ページへのリンクを追加</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.022</h2>

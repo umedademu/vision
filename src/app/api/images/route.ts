@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   ListObjectsV2Command,
   S3Client,
@@ -76,5 +77,62 @@ export async function GET() {
   } catch (error) {
     console.error("R2から画像一覧を取得できませんでした。", error);
     return NextResponse.json({ images: [] }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const config = getR2Config();
+
+  if (!config) {
+    return NextResponse.json(
+      { error: "画像を削除するための設定が完了していません。" },
+      { status: 503 },
+    );
+  }
+
+  let body: { key?: string };
+
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return NextResponse.json(
+      { error: "削除する画像の情報を読み取れませんでした。" },
+      { status: 400 },
+    );
+  }
+
+  const key = body.key?.trim() ?? "";
+
+  if (!key || key.length > 1_024 || !IMAGE_FILE_PATTERN.test(key)) {
+    return NextResponse.json(
+      { error: "削除する画像を確認できませんでした。" },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const client = new S3Client({
+      region: "auto",
+      endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+      },
+    });
+
+    await client.send(
+      new DeleteObjectCommand({
+        Bucket: config.bucketName,
+        Key: key,
+      }),
+    );
+
+    return NextResponse.json({ key });
+  } catch (error) {
+    console.error("R2から画像を削除できませんでした。", error);
+    return NextResponse.json(
+      { error: "画像を削除できませんでした。" },
+      { status: 500 },
+    );
   }
 }

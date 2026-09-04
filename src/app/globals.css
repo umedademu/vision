@@ -127,11 +127,16 @@ body {
   animation: dissolve-out var(--dissolve-duration) ease-in-out both;
 }
 
-.updates-link {
+.slideshow-links {
   position: fixed;
   right: 1rem;
   bottom: 1rem;
   z-index: 20;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.slideshow-link {
   padding: 0.55rem 0.8rem;
   border: 1px solid rgb(255 255 255 / 25%);
   border-radius: 999px;
@@ -142,8 +147,8 @@ body {
   backdrop-filter: blur(8px);
 }
 
-.updates-link:hover,
-.updates-link:focus-visible {
+.slideshow-link:hover,
+.slideshow-link:focus-visible {
   background: rgb(0 0 0 / 75%);
   text-decoration: underline;
 }
@@ -394,4 +399,169 @@ body {
   display: inline-block;
   margin-top: 3rem;
   color: inherit;
+}
+
+.images-page {
+  min-height: 100svh;
+  padding: clamp(2rem, 6vw, 5rem);
+  background: #f5f5f3;
+  color: #171717;
+}
+
+.images-content {
+  width: min(100%, 72rem);
+  margin: 0 auto;
+}
+
+.images-label {
+  margin: 0 0 0.75rem;
+  color: #666;
+  font-size: 0.875rem;
+}
+
+.images-title {
+  margin: 0;
+  font-size: clamp(2.5rem, 8vw, 5rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+
+.images-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 2rem;
+}
+
+.images-actions p {
+  margin: 0 auto 0 0;
+  font-weight: 700;
+}
+
+.images-actions button,
+.images-confirmation button {
+  padding: 0.65rem 0.9rem;
+  border: 1px solid #aaa;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #171717;
+  font: inherit;
+  cursor: pointer;
+}
+
+.images-actions button:disabled,
+.images-confirmation button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.images-actions .images-delete-button,
+.images-confirmation .images-delete-confirm {
+  border-color: #a32121;
+  background: #a32121;
+  color: #fff;
+}
+
+.images-confirmation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #d8b1b1;
+  border-radius: 0.75rem;
+  background: #fff1f1;
+}
+
+.images-confirmation p {
+  margin: 0;
+}
+
+.images-confirmation div {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.images-message,
+.images-empty {
+  margin: 2rem 0 0;
+}
+
+.images-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.images-card {
+  position: relative;
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.6rem;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 8%);
+  cursor: pointer;
+}
+
+.images-card-selected {
+  border-color: #a32121;
+  background: #fff6f6;
+}
+
+.images-card input {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 1;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  accent-color: #a32121;
+}
+
+.images-card img {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 0.45rem;
+  background: #111;
+  object-fit: contain;
+}
+
+.images-card span {
+  overflow: hidden;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.images-navigation {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 3rem;
+}
+
+.images-navigation a {
+  color: inherit;
+}
+
+@media (max-width: 480px) {
+  .images-page {
+    padding: 2rem 1rem;
+  }
+
+  .images-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .images-actions .images-delete-button {
+    width: 100%;
+  }
 }

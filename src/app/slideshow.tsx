@@ -1648,14 +1648,19 @@ export function Slideshow() {
         </form>
       )}
 
-      <Link
-        className={`updates-link controls-hideable ${
+      <nav
+        className={`slideshow-links controls-hideable ${
           areControlsVisible ? "controls-visible" : ""
         }`}
-        href="/updates"
+        aria-label="関連ページ"
       >
-        更新情報
-      </Link>
+        <Link className="slideshow-link" href="/images">
+          画像管理
+        </Link>
+        <Link className="slideshow-link" href="/updates">
+          更新情報
+        </Link>
+      </nav>
     </main>
   );
 }
