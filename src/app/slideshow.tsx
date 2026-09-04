@@ -5,9 +5,10 @@ import type {
   ChangeEvent,
   CSSProperties,
   FormEvent,
-  SyntheticEvent,
 } from "react";
 import { useEffect, useRef, useState } from "react";
+import type { ImageItem } from "@/lib/image-crop";
+import { StoredImage } from "./stored-image";
 import {
   getImageSize,
   getRotatedDimensions,
@@ -15,11 +16,6 @@ import {
   parseImageSizeBasis,
   type ImageSizeBasis,
 } from "./image-size";
-
-type ImageItem = {
-  key: string;
-  url: string;
-};
 
 type ImagesResponse = {
   images: ImageItem[];
@@ -1218,10 +1214,9 @@ export function Slideshow() {
   function handleImageLoad(
     itemId: string,
     transitionId: number,
-    event: SyntheticEvent<HTMLImageElement>,
+    naturalWidth: number,
+    naturalHeight: number,
   ) {
-    const { naturalWidth, naturalHeight } = event.currentTarget;
-
     if (naturalWidth === 0 || naturalHeight === 0) {
       return;
     }
@@ -1399,23 +1394,20 @@ export function Slideshow() {
               >
                 <div className="floating-motion">
                   {previousImage && (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
+                    <StoredImage
                       key={`${item.id}-${item.transitionId}-previous`}
                       className="slideshow-image slideshow-image-previous"
-                      src={previousImage.url}
+                      image={previousImage}
                       alt=""
                     />
                   )}
-                  {/* R2の署名付きURLをブラウザから直接読み込みます。 */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <StoredImage
                     key={`${image.key}-${item.transitionId}`}
                     className="slideshow-image slideshow-image-current"
-                    src={image.url}
+                    image={image}
                     alt=""
-                    onLoad={(event) =>
-                      handleImageLoad(item.id, item.transitionId, event)
+                    onLoad={(width, height) =>
+                      handleImageLoad(item.id, item.transitionId, width, height)
                     }
                   />
                 </div>

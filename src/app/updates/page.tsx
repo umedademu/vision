@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.032</h1>
+        <h1 className="updates-title">v0.033</h1>
+
+        <section className="updates-entry">
+          <h2>v0.033</h2>
+          <ul>
+            <li>画像管理ページに、範囲を選んで保存する切り抜き編集を追加</li>
+            <li>切り抜き結果を画像一覧とスライド表示に反映</li>
+            <li>元画像を残し、後から切り抜き範囲を再調整できるように変更</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.032</h2>

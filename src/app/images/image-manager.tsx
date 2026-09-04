@@ -2,11 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-
-type ImageItem = {
-  key: string;
-  url: string;
-};
+import type { ImageItem } from "@/lib/image-crop";
+import { StoredImage } from "../stored-image";
+import { CropEditor } from "./crop-editor";
 
 type ImagesResponse = {
   images?: ImageItem[];
@@ -27,6 +25,7 @@ export function ImageManager() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [message, setMessage] = useState("");
+  const [editingImage, setEditingImage] = useState<ImageItem | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -148,7 +147,7 @@ export function ImageManager() {
         <div className="images-actions">
           <p>{images.length}枚</p>
           {images.length > 0 && (
-            <button type="button" onClick={toggleAllImages}>
+            <button type="button" disabled={isDeleting} onClick={toggleAllImages}>
               {selectedKeys.size === images.length ? "選択を解除" : "すべて選択"}
             </button>
           )}
@@ -198,22 +197,35 @@ export function ImageManager() {
         ) : (
           <div className="images-grid">
             {images.map((image) => (
-              <label
+              <article
                 className={`images-card ${
                   selectedKeys.has(image.key) ? "images-card-selected" : ""
                 }`}
                 key={image.key}
               >
-                <input
-                  type="checkbox"
-                  checked={selectedKeys.has(image.key)}
-                  onChange={() => toggleImage(image.key)}
-                />
-                {/* R2の署名付きURLをブラウザから直接読み込みます。 */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={image.url} alt={getImageName(image.key)} loading="lazy" />
-                <span>{getImageName(image.key)}</span>
-              </label>
+                <label className="images-card-selection">
+                  <input
+                    type="checkbox"
+                    aria-label={`${getImageName(image.key)}を選択`}
+                    checked={selectedKeys.has(image.key)}
+                    disabled={isDeleting}
+                    onChange={() => toggleImage(image.key)}
+                  />
+                  <StoredImage image={image} alt={getImageName(image.key)} loading="lazy" />
+                  <span>{getImageName(image.key)}</span>
+                </label>
+                <button
+                  className="images-crop-button"
+                  type="button"
+                  disabled={isDeleting}
+                  aria-label={`${getImageName(image.key)}を切り抜き`}
+                  onClick={() => {
+                    setIsConfirming(false);
+                    setMessage("");
+                    setEditingImage(image);
+                  }}
+                >切り抜き</button>
+              </article>
             ))}
           </div>
         )}
@@ -222,6 +234,18 @@ export function ImageManager() {
           <Link href="/">トップページへ戻る</Link>
           <Link href="/updates">更新情報</Link>
         </nav>
+        {editingImage && (
+          <CropEditor
+            key={editingImage.key}
+            image={editingImage}
+            onClose={() => setEditingImage(null)}
+            onSave={(savedImage) => {
+              setImages((currentImages) => currentImages.map((image) => image.key === savedImage.key ? savedImage : image));
+              setEditingImage(null);
+              setMessage("切り抜きを保存しました。");
+            }}
+          />
+        )}
       </div>
     </main>
   );

@@ -1,73 +1,73 @@
 import {
-  DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
   ListObjectsV2Command,
-  S3Client,
+  type _Object as R2Object,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { NextResponse } from "next/server";
+import { isImageCrop, type ImageCrop } from "@/lib/image-crop";
+import { getCropKey, getR2Storage, IMAGE_FILE_PATTERN } from "@/lib/r2";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const IMAGE_FILE_PATTERN = /\.(avif|gif|jpe?g|png|webp)$/i;
 const SIGNED_URL_EXPIRES_IN_SECONDS = 24 * 60 * 60;
 
-function getR2Config() {
-  const config = {
-    accountId: process.env.R2_ACCOUNT_ID,
-    accessKeyId: process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-    bucketName: process.env.R2_BUCKET_NAME,
-  };
-
-  if (Object.values(config).some((value) => !value)) {
-    return null;
-  }
-
-  return config as Record<keyof typeof config, string>;
-}
-
 export async function GET() {
-  const config = getR2Config();
+  const storage = getR2Storage();
 
-  if (!config) {
+  if (!storage) {
     return NextResponse.json({ images: [] });
   }
 
   try {
-    const client = new S3Client({
-      region: "auto",
-      endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
-      },
-    });
-
-    const result = await client.send(
-      new ListObjectsV2Command({
-        Bucket: config.bucketName,
+    const { client, bucketName } = storage;
+    const allObjects: R2Object[] = [];
+    let continuationToken: string | undefined;
+    do {
+      const result = await client.send(new ListObjectsV2Command({
+        Bucket: bucketName,
         MaxKeys: 1_000,
-      }),
-    );
+        ContinuationToken: continuationToken,
+      }));
+      allObjects.push(...(result.Contents ?? []));
+      continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+    } while (continuationToken);
 
-    const objects = (result.Contents ?? []).filter(
+    const storedKeys = new Set(allObjects.map((object) => object.Key));
+    const objects = allObjects.filter(
       (object) => object.Key && object.Size && IMAGE_FILE_PATTERN.test(object.Key),
     );
 
     const images = await Promise.all(
-      objects.map(async (object) => ({
-        key: object.Key as string,
-        url: await getSignedUrl(
-          client,
-          new GetObjectCommand({
-            Bucket: config.bucketName,
-            Key: object.Key,
-          }),
-          { expiresIn: SIGNED_URL_EXPIRES_IN_SECONDS },
-        ),
-      })),
+      objects.map(async (object) => {
+        const key = object.Key as string;
+        let crop: ImageCrop | undefined;
+        if (storedKeys.has(getCropKey(key))) {
+          try {
+            const saved = await client.send(new GetObjectCommand({ Bucket: bucketName, Key: getCropKey(key) }));
+            const metadata = JSON.parse(await saved.Body!.transformToString());
+            if (metadata?.sourceETag === object.ETag && isImageCrop(metadata?.crop)) {
+              crop = metadata.crop;
+            }
+          } catch (error) {
+            if (!(error instanceof Error && error.name === "NoSuchKey")) throw error;
+          }
+        }
+        return {
+          key,
+          crop,
+          url: await getSignedUrl(
+            client,
+            new GetObjectCommand({
+              Bucket: bucketName,
+              Key: object.Key,
+            }),
+            { expiresIn: SIGNED_URL_EXPIRES_IN_SECONDS },
+          ),
+        };
+      }),
     );
 
     return NextResponse.json(
@@ -81,9 +81,9 @@ export async function GET() {
 }
 
 export async function DELETE(request: Request) {
-  const config = getR2Config();
+  const storage = getR2Storage();
 
-  if (!config) {
+  if (!storage) {
     return NextResponse.json(
       { error: "画像を削除するための設定が完了していません。" },
       { status: 503 },
@@ -111,21 +111,15 @@ export async function DELETE(request: Request) {
   }
 
   try {
-    const client = new S3Client({
-      region: "auto",
-      endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
-      },
-    });
+    const { client, bucketName } = storage;
 
-    await client.send(
-      new DeleteObjectCommand({
-        Bucket: config.bucketName,
-        Key: key,
+    const deleted = await client.send(
+      new DeleteObjectsCommand({
+        Bucket: bucketName,
+        Delete: { Objects: [{ Key: key }, { Key: getCropKey(key) }] },
       }),
     );
+    if (deleted.Errors?.length) throw new Error("画像または切り抜き範囲を削除できませんでした。");
 
     return NextResponse.json({ key });
   } catch (error) {
