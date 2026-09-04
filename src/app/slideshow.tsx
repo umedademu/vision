@@ -27,6 +27,8 @@ type FloatingItem = {
   sizePercent: number;
   driftX: number;
   driftY: number;
+  slotWidthPercent: number;
+  slotHeightPercent: number;
   floatDurationMs: number;
   floatDelayMs: number;
   rotation: number;
@@ -35,8 +37,7 @@ type FloatingItem = {
 
 const DEFAULT_MAX_DISPLAY_COUNT = 12;
 const MIN_CONFIGURABLE_DISPLAY_COUNT = 1;
-const MAX_CONFIGURABLE_DISPLAY_COUNT = 12;
-const PLACEMENT_AREA_COUNT = 12;
+const MAX_CONFIGURABLE_DISPLAY_COUNT = 100;
 const DISPLAY_COUNT_STORAGE_KEY = "vision-maximum-display-count";
 const EDGE_GAP_PX = 8;
 const MIN_DISPLAY_INTERVAL_MS = 5_000;
@@ -51,6 +52,12 @@ function randomSignedInteger(min: number, max: number) {
   return Math.random() < 0.5 ? -value : value;
 }
 
+function randomSignedNumber(min: number, max: number) {
+  const value = Math.random() * (max - min) + min;
+  const signedValue = Math.random() < 0.5 ? -value : value;
+  return Math.round(signedValue * 1_000) / 1_000;
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
@@ -59,7 +66,7 @@ function getMinimumDisplayCount(maximumDisplayCount: number) {
   return Math.max(1, Math.round(maximumDisplayCount * 0.7));
 }
 
-function getSlotSize(viewportWidth: number) {
+function getBaseSlotSize(viewportWidth: number) {
   if (viewportWidth <= 640) {
     return { heightPercent: 15, widthPercent: 30 };
   }
@@ -77,10 +84,11 @@ function getSafeEdgeMargins(
   rotation: number,
   driftX: number,
   driftY: number,
+  slotWidthPercent: number,
+  slotHeightPercent: number,
 ) {
-  const { heightPercent, widthPercent } = getSlotSize(viewportWidth);
-  const slotWidth = viewportWidth * (widthPercent / 100);
-  const slotHeight = viewportHeight * (heightPercent / 100);
+  const slotWidth = viewportWidth * (slotWidthPercent / 100);
+  const slotHeight = viewportHeight * (slotHeightPercent / 100);
   const rotationRadians = (Math.abs(rotation) * Math.PI) / 180;
   const rotatedWidth =
     slotWidth * Math.cos(rotationRadians) +
@@ -152,12 +160,26 @@ function createFloatingItems(
     maximumDisplayCount,
   );
   const isMobile = viewportWidth <= 640;
-  const isTablet = viewportWidth > 640 && viewportWidth <= 1_000;
-  const columns = isMobile ? 3 : 4;
-  const rows = isMobile ? 4 : 3;
-  const jitterX = isMobile ? 1 : isTablet ? 5 : 4;
-  const jitterY = isMobile ? 3 : isTablet ? 2 : 4;
-  const placementIndexes = shuffleIndexes(PLACEMENT_AREA_COUNT).slice(
+  const layoutRatio = isMobile ? 3 / 4 : 4 / 3;
+  const columns =
+    displayCount === 1
+      ? 1
+      : Math.ceil(Math.sqrt(displayCount * layoutRatio));
+  const rows = Math.ceil(displayCount / columns);
+  const cellWidthPercent = 100 / columns;
+  const cellHeightPercent = 100 / rows;
+  const layoutScale = Math.min(
+    1,
+    Math.sqrt(DEFAULT_MAX_DISPLAY_COUNT / displayCount),
+  );
+  const baseSlotSize = getBaseSlotSize(viewportWidth);
+  const slotWidthPercent = baseSlotSize.widthPercent * layoutScale;
+  const slotHeightPercent = baseSlotSize.heightPercent * layoutScale;
+  const minimumDriftX = Math.min(1, Math.max(0.25, cellWidthPercent * 0.04));
+  const maximumDriftX = Math.min(2, Math.max(0.5, cellWidthPercent * 0.08));
+  const minimumDriftY = Math.min(1, Math.max(0.25, cellHeightPercent * 0.04));
+  const maximumDriftY = Math.min(2, Math.max(0.5, cellHeightPercent * 0.08));
+  const placementIndexes = shuffleIndexes(columns * rows).slice(
     0,
     displayCount,
   );
@@ -171,8 +193,8 @@ function createFloatingItems(
       const anchorX = ((column + 0.5) / columns) * 100;
       const anchorY = ((row + 0.5) / rows) * 100;
       const sizePercent = randomInteger(80, 100);
-      const driftX = randomSignedInteger(1, 2);
-      const driftY = randomSignedInteger(1, 2);
+      const driftX = randomSignedNumber(minimumDriftX, maximumDriftX);
+      const driftY = randomSignedNumber(minimumDriftY, maximumDriftY);
       const rotation = randomSignedInteger(1, 4);
       const safeEdgeMargins = getSafeEdgeMargins(
         viewportWidth,
@@ -180,24 +202,36 @@ function createFloatingItems(
         rotation,
         driftX,
         driftY,
+        slotWidthPercent,
+        slotHeightPercent,
+      );
+      const maximumJitterX = Math.max(
+        0,
+        cellWidthPercent / 2 - safeEdgeMargins.x,
+      );
+      const maximumJitterY = Math.max(
+        0,
+        cellHeightPercent / 2 - safeEdgeMargins.y,
       );
 
       return {
         id: `${Date.now()}-${slotIndex}-${Math.random()}`,
         imageIndex,
         x: clamp(
-          anchorX + randomSignedInteger(0, jitterX),
+          anchorX + randomSignedNumber(0, maximumJitterX),
           safeEdgeMargins.x,
           100 - safeEdgeMargins.x,
         ),
         y: clamp(
-          anchorY + randomSignedInteger(0, jitterY),
+          anchorY + randomSignedNumber(0, maximumJitterY),
           safeEdgeMargins.y,
           100 - safeEdgeMargins.y,
         ),
         sizePercent,
         driftX,
         driftY,
+        slotWidthPercent,
+        slotHeightPercent,
         floatDurationMs,
         floatDelayMs: -randomInteger(0, floatDurationMs),
         rotation,
@@ -485,6 +519,8 @@ export function Slideshow() {
               left: `${item.x}%`,
               top: `${item.y}%`,
               zIndex: item.layer,
+              "--slot-width": `${item.slotWidthPercent}vw`,
+              "--slot-height": `${item.slotHeightPercent}svh`,
               "--drift-x-start": `${-item.driftX}vw`,
               "--drift-y-start": `${-item.driftY}svh`,
               "--drift-x": `${item.driftX}vw`,

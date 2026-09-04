@@ -45,8 +45,8 @@ body {
 
 .floating-slot {
   position: absolute;
-  width: 15vw;
-  height: 20svh;
+  width: var(--slot-width);
+  height: var(--slot-height);
   transform: translate(-50%, -50%);
 }
 
@@ -244,20 +244,6 @@ body {
   .floating-motion,
   .slideshow-image {
     animation: none;
-  }
-}
-
-@media (max-width: 1000px) {
-  .floating-slot {
-    width: 12vw;
-    height: 30svh;
-  }
-}
-
-@media (max-width: 640px) {
-  .floating-slot {
-    width: 30vw;
-    height: 15svh;
   }
 }
 

@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.009</h1>
+        <h1 className="updates-title">v0.010</h1>
+
+        <section className="updates-entry">
+          <h2>v0.010</h2>
+          <ul>
+            <li>最大表示枚数を100枚まで設定可能に変更</li>
+            <li>表示枚数に応じて配置領域を自動的に細分化</li>
+            <li>画像サイズと浮遊幅を表示枚数に応じて自動調整</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.009</h2>
