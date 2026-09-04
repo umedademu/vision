@@ -10,7 +10,15 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.008</h1>
+        <h1 className="updates-title">v0.009</h1>
+
+        <section className="updates-entry">
+          <h2>v0.009</h2>
+          <ul>
+            <li>画像が画面の上下左右からはみ出さないよう調整</li>
+            <li>画面サイズの変更時に安全な配置を再計算</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.008</h2>

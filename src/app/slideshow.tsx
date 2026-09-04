@@ -38,6 +38,7 @@ const MIN_CONFIGURABLE_DISPLAY_COUNT = 1;
 const MAX_CONFIGURABLE_DISPLAY_COUNT = 12;
 const PLACEMENT_AREA_COUNT = 12;
 const DISPLAY_COUNT_STORAGE_KEY = "vision-maximum-display-count";
+const EDGE_GAP_PX = 8;
 const MIN_DISPLAY_INTERVAL_MS = 5_000;
 const MAX_DISPLAY_INTERVAL_MS = 10_000;
 
@@ -56,6 +57,52 @@ function clamp(value: number, min: number, max: number) {
 
 function getMinimumDisplayCount(maximumDisplayCount: number) {
   return Math.max(1, Math.round(maximumDisplayCount * 0.7));
+}
+
+function getSlotSize(viewportWidth: number) {
+  if (viewportWidth <= 640) {
+    return { heightPercent: 15, widthPercent: 30 };
+  }
+
+  if (viewportWidth <= 1_000) {
+    return { heightPercent: 30, widthPercent: 12 };
+  }
+
+  return { heightPercent: 20, widthPercent: 15 };
+}
+
+function getSafeEdgeMargins(
+  viewportWidth: number,
+  viewportHeight: number,
+  rotation: number,
+  driftX: number,
+  driftY: number,
+) {
+  const { heightPercent, widthPercent } = getSlotSize(viewportWidth);
+  const slotWidth = viewportWidth * (widthPercent / 100);
+  const slotHeight = viewportHeight * (heightPercent / 100);
+  const rotationRadians = (Math.abs(rotation) * Math.PI) / 180;
+  const rotatedWidth =
+    slotWidth * Math.cos(rotationRadians) +
+    slotHeight * Math.sin(rotationRadians);
+  const rotatedHeight =
+    slotHeight * Math.cos(rotationRadians) +
+    slotWidth * Math.sin(rotationRadians);
+
+  return {
+    x:
+      ((rotatedWidth / 2 +
+        viewportWidth * (Math.abs(driftX) / 100) +
+        EDGE_GAP_PX) /
+        viewportWidth) *
+      100,
+    y:
+      ((rotatedHeight / 2 +
+        viewportHeight * (Math.abs(driftY) / 100) +
+        EDGE_GAP_PX) /
+        viewportHeight) *
+      100,
+  };
 }
 
 function shuffleIndexes(imageCount: number) {
@@ -97,6 +144,7 @@ function createInitialIndexes(imageCount: number, displayCount: number) {
 function createFloatingItems(
   imageCount: number,
   viewportWidth: number,
+  viewportHeight: number,
   maximumDisplayCount: number,
 ) {
   const displayCount = randomInteger(
@@ -109,8 +157,6 @@ function createFloatingItems(
   const rows = isMobile ? 4 : 3;
   const jitterX = isMobile ? 1 : isTablet ? 5 : 4;
   const jitterY = isMobile ? 3 : isTablet ? 2 : 4;
-  const minimumX = isMobile ? 17 : isTablet ? 8 : 10;
-  const minimumY = isMobile ? 10 : isTablet ? 17 : 12;
   const placementIndexes = shuffleIndexes(PLACEMENT_AREA_COUNT).slice(
     0,
     displayCount,
@@ -124,26 +170,37 @@ function createFloatingItems(
       const row = Math.floor(placementIndex / columns);
       const anchorX = ((column + 0.5) / columns) * 100;
       const anchorY = ((row + 0.5) / rows) * 100;
+      const sizePercent = randomInteger(80, 100);
+      const driftX = randomSignedInteger(1, 2);
+      const driftY = randomSignedInteger(1, 2);
+      const rotation = randomSignedInteger(1, 4);
+      const safeEdgeMargins = getSafeEdgeMargins(
+        viewportWidth,
+        viewportHeight,
+        rotation,
+        driftX,
+        driftY,
+      );
 
       return {
         id: `${Date.now()}-${slotIndex}-${Math.random()}`,
         imageIndex,
         x: clamp(
           anchorX + randomSignedInteger(0, jitterX),
-          minimumX,
-          100 - minimumX,
+          safeEdgeMargins.x,
+          100 - safeEdgeMargins.x,
         ),
         y: clamp(
           anchorY + randomSignedInteger(0, jitterY),
-          minimumY,
-          100 - minimumY,
+          safeEdgeMargins.y,
+          100 - safeEdgeMargins.y,
         ),
-        sizePercent: randomInteger(80, 100),
-        driftX: randomSignedInteger(1, 2),
-        driftY: randomSignedInteger(1, 2),
+        sizePercent,
+        driftX,
+        driftY,
         floatDurationMs,
         floatDelayMs: -randomInteger(0, floatDurationMs),
-        rotation: randomSignedInteger(1, 4),
+        rotation,
         layer: randomInteger(1, 5),
       } satisfies FloatingItem;
     },
@@ -235,6 +292,7 @@ export function Slideshow() {
           createFloatingItems(
             loadedImages.length,
             window.innerWidth,
+            window.innerHeight,
             initialMaximumDisplayCount,
           ),
         );
@@ -283,6 +341,35 @@ export function Slideshow() {
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [images.length, floatingItems.length]);
 
+  useEffect(() => {
+    if (images.length === 0) {
+      return;
+    }
+
+    let resizeTimer: number | undefined;
+
+    function handleResize() {
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        setFloatingItems(
+          createFloatingItems(
+            images.length,
+            window.innerWidth,
+            window.innerHeight,
+            maximumDisplayCount,
+          ),
+        );
+      }, 200);
+    }
+
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.clearTimeout(resizeTimer);
+    };
+  }, [images.length, maximumDisplayCount]);
+
   function handleDisplaySettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const enteredMaximumDisplayCount = Number.parseInt(
@@ -307,6 +394,7 @@ export function Slideshow() {
       createFloatingItems(
         images.length,
         window.innerWidth,
+        window.innerHeight,
         nextMaximumDisplayCount,
       ),
     );
@@ -363,6 +451,7 @@ export function Slideshow() {
         const nextItems = createFloatingItems(
           refreshedImages.length,
           window.innerWidth,
+          window.innerHeight,
           maximumDisplayCount,
         );
         const uploadedIndex = refreshedImages.findIndex(
