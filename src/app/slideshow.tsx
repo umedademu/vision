@@ -989,6 +989,29 @@ export function Slideshow() {
     return () => window.clearTimeout(hideTimer);
   }, [areControlsVisible, isSettingsOpen, isUploading]);
 
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      const target = event.target;
+
+      if (
+        event.repeat ||
+        (target instanceof HTMLElement &&
+          (target.isContentEditable ||
+            target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.tagName === "SELECT"))
+      ) {
+        return;
+      }
+
+      setAreControlsVisible(true);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   function handleControlsToggle() {
     if (areControlsVisible) {
       setIsSettingsOpen(false);
