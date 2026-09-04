@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.002</h1>
+        <h1 className="updates-title">v0.003</h1>
+
+        <section className="updates-entry">
+          <h2>v0.003</h2>
+          <ul>
+            <li>トップページから画像を追加できる機能を追加</li>
+            <li>複数画像の一括追加と、1枚25MBまでの画像に対応</li>
+            <li>合言葉を使って第三者からの追加を防ぐ仕組みを追加</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.002</h2>
