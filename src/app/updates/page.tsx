@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.019</h1>
+        <h1 className="updates-title">v0.020</h1>
+
+        <section className="updates-entry">
+          <h2>v0.020</h2>
+          <ul>
+            <li>画像の切り替えを1.0〜1.5秒の柔らかな交差表示へ変更</li>
+            <li>古い画像が徐々に消えながら新しい画像が現れるよう調整</li>
+            <li>表示枚数が増減する場合も徐々に現れる・消える動きへ変更</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.019</h2>

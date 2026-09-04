@@ -27,11 +27,17 @@ type UploadUrlResponse = {
 type FloatingItem = {
   id: string;
   imageIndex: number;
+  previousImageIndex?: number;
   x: number;
   y: number;
   diagonalPx: number;
+  previousDiagonalPx?: number;
   maximumSafeDiagonalPx: number;
   diagonalScale: number;
+  previousDiagonalScale?: number;
+  dissolveDurationMs: number;
+  transitionId: number;
+  isLeaving: boolean;
   driftX: number;
   driftY: number;
   floatDurationMs: number;
@@ -82,6 +88,8 @@ const LEGACY_MAX_IMAGE_LONG_SIDE_STORAGE_KEY =
   "vision-maximum-image-long-side-px";
 const EDGE_GAP_PX = 8;
 const CONTROLS_VISIBLE_MS = 8_000;
+const MIN_DISSOLVE_DURATION_MS = 1_000;
+const MAX_DISSOLVE_DURATION_MS = 1_500;
 
 function randomInteger(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -288,6 +296,12 @@ function createFloatingItems(
         diagonalPx,
         maximumSafeDiagonalPx: maximumRenderedDiagonalPx,
         diagonalScale: 1,
+        dissolveDurationMs: randomInteger(
+          MIN_DISSOLVE_DURATION_MS,
+          MAX_DISSOLVE_DURATION_MS,
+        ),
+        transitionId: 0,
+        isLeaving: false,
         driftX,
         driftY,
         floatDurationMs,
@@ -326,7 +340,8 @@ function createAddedFloatingItem(
   viewportHeight: number,
   settings: SlideshowSettings,
 ) {
-  const nextDisplayCount = currentItems.length + 1;
+  const nextDisplayCount =
+    currentItems.filter((item) => !item.isLeaving).length + 1;
   const isMobile = viewportWidth <= 640;
   const layoutRatio = isMobile ? 3 / 4 : 4 / 3;
   const columns = Math.ceil(Math.sqrt(nextDisplayCount * layoutRatio));
@@ -428,6 +443,12 @@ function createAddedFloatingItem(
     diagonalPx,
     maximumSafeDiagonalPx: maximumRenderedDiagonalPx,
     diagonalScale: 1,
+    dissolveDurationMs: randomInteger(
+      MIN_DISSOLVE_DURATION_MS,
+      MAX_DISSOLVE_DURATION_MS,
+    ),
+    transitionId: 0,
+    isLeaving: false,
     driftX,
     driftY,
     floatDurationMs,
@@ -453,8 +474,11 @@ function changeFloatingItem(
     return currentItems;
   }
 
+  const activeDisplayCount = currentItems.filter(
+    (item) => !item.isLeaving,
+  ).length;
   const nextDisplayCount = getNextDisplayCount(
-    currentItems.length,
+    activeDisplayCount,
     settings.minimumDisplayCount,
     settings.maximumDisplayCount,
   );
@@ -462,11 +486,13 @@ function changeFloatingItem(
     item.id === changingItemId
       ? {
           ...item,
+          previousImageIndex: item.imageIndex,
           imageIndex: chooseNextIndex(
             item.imageIndex,
             imageCount,
             currentItems.map((visibleItem) => visibleItem.imageIndex),
           ),
+          previousDiagonalPx: item.diagonalPx,
           diagonalPx: Math.min(
             randomInteger(
               settings.minimumImageDiagonalPx,
@@ -474,21 +500,41 @@ function changeFloatingItem(
             ),
             item.maximumSafeDiagonalPx,
           ),
+          previousDiagonalScale: item.diagonalScale,
           diagonalScale: 1,
+          dissolveDurationMs: randomInteger(
+            MIN_DISSOLVE_DURATION_MS,
+            MAX_DISSOLVE_DURATION_MS,
+          ),
+          transitionId: item.transitionId + 1,
         }
       : item,
   );
 
-  if (nextDisplayCount < currentItems.length) {
+  if (nextDisplayCount < activeDisplayCount) {
     const removableIndexes = changedItems
       .map((_, index) => index)
-      .filter((index) => index !== changingItemIndex);
+      .filter(
+        (index) =>
+          index !== changingItemIndex && !changedItems[index].isLeaving,
+      );
     const removeIndex =
       removableIndexes[randomInteger(0, removableIndexes.length - 1)];
-    return changedItems.filter((_, index) => index !== removeIndex);
+    return changedItems.map((item, index) =>
+      index === removeIndex
+        ? {
+            ...item,
+            isLeaving: true,
+            dissolveDurationMs: randomInteger(
+              MIN_DISSOLVE_DURATION_MS,
+              MAX_DISSOLVE_DURATION_MS,
+            ),
+          }
+        : item,
+    );
   }
 
-  if (nextDisplayCount > currentItems.length) {
+  if (nextDisplayCount > activeDisplayCount) {
     return [
       ...changedItems,
       createAddedFloatingItem(
@@ -573,6 +619,10 @@ export function Slideshow() {
   const [uploadMessage, setUploadMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const switchTimersRef = useRef<Map<string, number>>(new Map());
+  const transitionTimersRef = useRef<
+    Map<string, { timer: number; transitionId: number }>
+  >(new Map());
+  const removalTimersRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     const controller = new AbortController();
@@ -695,10 +745,14 @@ export function Slideshow() {
   }, []);
 
   useEffect(() => {
-    const visibleItemIds = new Set(floatingItems.map((item) => item.id));
+    const activeItemIds = new Set(
+      floatingItems
+        .filter((item) => !item.isLeaving)
+        .map((item) => item.id),
+    );
 
     for (const [itemId, timer] of switchTimersRef.current) {
-      if (!visibleItemIds.has(itemId) || images.length < 2) {
+      if (!activeItemIds.has(itemId) || images.length < 2) {
         window.clearTimeout(timer);
         switchTimersRef.current.delete(itemId);
       }
@@ -709,7 +763,7 @@ export function Slideshow() {
     }
 
     for (const item of floatingItems) {
-      if (switchTimersRef.current.has(item.id)) {
+      if (item.isLeaving || switchTimersRef.current.has(item.id)) {
         continue;
       }
 
@@ -728,14 +782,92 @@ export function Slideshow() {
             ),
           );
         },
-        randomInteger(
-          settings.minimumSwitchSeconds * 1_000,
-          settings.maximumSwitchSeconds * 1_000,
+        Math.max(
+          item.dissolveDurationMs,
+          randomInteger(
+            settings.minimumSwitchSeconds * 1_000,
+            settings.maximumSwitchSeconds * 1_000,
+          ),
         ),
       );
       switchTimersRef.current.set(itemId, timer);
     }
   }, [floatingItems, images.length, settings]);
+
+  useEffect(() => {
+    const itemsById = new Map(floatingItems.map((item) => [item.id, item]));
+
+    for (const [itemId, transition] of transitionTimersRef.current) {
+      const item = itemsById.get(itemId);
+
+      if (
+        item?.previousImageIndex === undefined ||
+        item.transitionId !== transition.transitionId
+      ) {
+        window.clearTimeout(transition.timer);
+        transitionTimersRef.current.delete(itemId);
+      }
+    }
+
+    for (const item of floatingItems) {
+      if (
+        item.previousImageIndex === undefined ||
+        transitionTimersRef.current.has(item.id)
+      ) {
+        continue;
+      }
+
+      const itemId = item.id;
+      const transitionId = item.transitionId;
+      const timer = window.setTimeout(() => {
+        transitionTimersRef.current.delete(itemId);
+        setFloatingItems((currentItems) =>
+          currentItems.map((currentItem) =>
+            currentItem.id === itemId &&
+            currentItem.transitionId === transitionId
+              ? {
+                  ...currentItem,
+                  previousImageIndex: undefined,
+                  previousDiagonalPx: undefined,
+                  previousDiagonalScale: undefined,
+                }
+              : currentItem,
+          ),
+        );
+      }, item.dissolveDurationMs);
+
+      transitionTimersRef.current.set(itemId, { timer, transitionId });
+    }
+  }, [floatingItems]);
+
+  useEffect(() => {
+    const leavingItemIds = new Set(
+      floatingItems.filter((item) => item.isLeaving).map((item) => item.id),
+    );
+
+    for (const [itemId, timer] of removalTimersRef.current) {
+      if (!leavingItemIds.has(itemId)) {
+        window.clearTimeout(timer);
+        removalTimersRef.current.delete(itemId);
+      }
+    }
+
+    for (const item of floatingItems) {
+      if (!item.isLeaving || removalTimersRef.current.has(item.id)) {
+        continue;
+      }
+
+      const itemId = item.id;
+      const timer = window.setTimeout(() => {
+        removalTimersRef.current.delete(itemId);
+        setFloatingItems((currentItems) =>
+          currentItems.filter((currentItem) => currentItem.id !== itemId),
+        );
+      }, item.dissolveDurationMs);
+
+      removalTimersRef.current.set(itemId, timer);
+    }
+  }, [floatingItems]);
 
   useEffect(
     () => () => {
@@ -743,6 +875,16 @@ export function Slideshow() {
         window.clearTimeout(timer);
       }
       switchTimersRef.current.clear();
+
+      for (const transition of transitionTimersRef.current.values()) {
+        window.clearTimeout(transition.timer);
+      }
+      transitionTimersRef.current.clear();
+
+      for (const timer of removalTimersRef.current.values()) {
+        window.clearTimeout(timer);
+      }
+      removalTimersRef.current.clear();
     },
     [],
   );
@@ -1033,12 +1175,22 @@ export function Slideshow() {
         <div className="floating-stage">
           {floatingItems.map((item) => {
             const image = images[item.imageIndex];
+            const previousImage =
+              item.previousImageIndex === undefined
+                ? undefined
+                : images[item.previousImageIndex];
             const floatingStyle = {
               left: `${item.x}%`,
               top: `${item.y}%`,
               zIndex: item.layer,
               "--image-size": `${item.diagonalPx}px`,
               "--image-diagonal-scale": item.diagonalScale,
+              "--previous-image-size": `${
+                item.previousDiagonalPx ?? item.diagonalPx
+              }px`,
+              "--previous-image-diagonal-scale":
+                item.previousDiagonalScale ?? item.diagonalScale,
+              "--dissolve-duration": `${item.dissolveDurationMs}ms`,
               "--drift-x-start": `${-item.driftX}vw`,
               "--drift-y-start": `${-item.driftY}svh`,
               "--drift-x": `${item.driftX}vw`,
@@ -1051,16 +1203,27 @@ export function Slideshow() {
 
             return (
               <div
-                className="floating-slot"
+                className={`floating-slot ${
+                  item.isLeaving ? "floating-slot-leaving" : ""
+                }`}
                 key={item.id}
                 style={floatingStyle}
               >
                 <div className="floating-motion">
+                  {previousImage && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      key={`${item.id}-${item.transitionId}-previous`}
+                      className="slideshow-image slideshow-image-previous"
+                      src={previousImage.url}
+                      alt=""
+                    />
+                  )}
                   {/* R2の署名付きURLをブラウザから直接読み込みます。 */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    key={image.key}
-                    className="slideshow-image"
+                    key={`${image.key}-${item.transitionId}`}
+                    className="slideshow-image slideshow-image-current"
                     src={image.url}
                     alt=""
                     onLoad={(event) => handleImageLoad(item.id, event)}

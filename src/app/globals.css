@@ -84,6 +84,11 @@ body {
     height 1.2s ease;
 }
 
+.floating-slot-leaving {
+  pointer-events: none;
+  animation: dissolve-out var(--dissolve-duration) ease-in-out both;
+}
+
 .floating-motion {
   display: grid;
   width: 100%;
@@ -95,6 +100,7 @@ body {
 
 .slideshow-image {
   display: block;
+  grid-area: 1 / 1;
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -105,7 +111,20 @@ body {
   transform: scale(var(--image-diagonal-scale, 1));
   transform-origin: center;
   filter: drop-shadow(0 0.75rem 1.5rem rgb(0 0 0 / 45%));
-  animation: fade-in 600ms ease-out;
+}
+
+.slideshow-image-current {
+  animation: dissolve-in var(--dissolve-duration) ease-in-out both;
+}
+
+.slideshow-image-previous {
+  width: var(--previous-image-size);
+  height: var(--previous-image-size);
+  max-width: none;
+  max-height: none;
+  transform: scale(var(--previous-image-diagonal-scale, 1));
+  pointer-events: none;
+  animation: dissolve-out var(--dissolve-duration) ease-in-out both;
 }
 
 .updates-link {
@@ -282,13 +301,27 @@ body {
   background: #ddd;
 }
 
-@keyframes fade-in {
+@keyframes dissolve-in {
   from {
     opacity: 0;
+    filter: blur(3px) drop-shadow(0 0.75rem 1.5rem rgb(0 0 0 / 45%));
   }
 
   to {
     opacity: 1;
+    filter: blur(0) drop-shadow(0 0.75rem 1.5rem rgb(0 0 0 / 45%));
+  }
+}
+
+@keyframes dissolve-out {
+  from {
+    opacity: 1;
+    filter: blur(0) drop-shadow(0 0.75rem 1.5rem rgb(0 0 0 / 45%));
+  }
+
+  to {
+    opacity: 0;
+    filter: blur(3px) drop-shadow(0 0.75rem 1.5rem rgb(0 0 0 / 45%));
   }
 }
 
@@ -310,8 +343,13 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .floating-motion,
-  .slideshow-image {
+  .slideshow-image,
+  .floating-slot-leaving {
     animation: none;
+  }
+
+  .slideshow-image-previous {
+    display: none;
   }
 }
 
