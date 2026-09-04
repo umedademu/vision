@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.024</h1>
+        <h1 className="updates-title">v0.025</h1>
+
+        <section className="updates-entry">
+          <h2>v0.025</h2>
+          <ul>
+            <li>画面端の余裕を画像ごとの実際の横幅と高さから計算</li>
+            <li>縦長画像を左右、横長画像を上下へ広く配置できるよう変更</li>
+            <li>指定サイズと画面内表示を保ちながら中央への集中を軽減</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.024</h2>

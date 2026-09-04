@@ -74,6 +74,16 @@ body {
 
 .floating-slot {
   position: absolute;
+  top: clamp(
+    calc(var(--safe-half-height) + var(--safe-drift-y) + var(--edge-gap)),
+    var(--position-y),
+    calc(100% - var(--safe-half-height) - var(--safe-drift-y) - var(--edge-gap))
+  );
+  left: clamp(
+    calc(var(--safe-half-width) + var(--safe-drift-x) + var(--edge-gap)),
+    var(--position-x),
+    calc(100% - var(--safe-half-width) - var(--safe-drift-x) - var(--edge-gap))
+  );
   width: var(--image-size);
   height: var(--image-size);
   transform: translate(-50%, -50%);

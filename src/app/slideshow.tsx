@@ -35,6 +35,10 @@ type FloatingItem = {
   maximumSafeDiagonalPx: number;
   diagonalScale: number;
   previousDiagonalScale?: number;
+  imageWidthRatio: number;
+  imageHeightRatio: number;
+  previousImageWidthRatio?: number;
+  previousImageHeightRatio?: number;
   dissolveDurationMs: number;
   transitionId: number;
   isLeaving: boolean;
@@ -135,29 +139,6 @@ function getLegacyMinimumDisplayCount(maximumDisplayCount: number) {
   return Math.max(1, Math.round(maximumDisplayCount * 0.7));
 }
 
-function getSafeEdgeMargins(
-  viewportWidth: number,
-  viewportHeight: number,
-  driftX: number,
-  driftY: number,
-  diagonalPx: number,
-) {
-  return {
-    x:
-      ((diagonalPx / 2 +
-        viewportWidth * (Math.abs(driftX) / 100) +
-        EDGE_GAP_PX) /
-        viewportWidth) *
-      100,
-    y:
-      ((diagonalPx / 2 +
-        viewportHeight * (Math.abs(driftY) / 100) +
-        EDGE_GAP_PX) /
-        viewportHeight) *
-      100,
-  };
-}
-
 function getMaximumSafeDiagonalPx(
   viewportWidth: number,
   viewportHeight: number,
@@ -177,6 +158,21 @@ function getMaximumSafeDiagonalPx(
       Math.min(availableViewportWidth, availableViewportHeight),
     ),
   );
+}
+
+function getRotatedDimensions(
+  width: number,
+  height: number,
+  rotationDegrees: number,
+) {
+  const rotationRadians = (Math.abs(rotationDegrees) * Math.PI) / 180;
+  const cosine = Math.cos(rotationRadians);
+  const sine = Math.sin(rotationRadians);
+
+  return {
+    width: width * cosine + height * sine,
+    height: height * cosine + width * sine,
+  };
 }
 
 function shuffleIndexes(imageCount: number) {
@@ -224,13 +220,6 @@ function findOpenPosition(
   maximumRenderedDiagonalPx: number,
   overlapTolerancePercent: number,
 ) {
-  const safeEdgeMargins = getSafeEdgeMargins(
-    viewportWidth,
-    viewportHeight,
-    driftX,
-    driftY,
-    maximumRenderedDiagonalPx,
-  );
   const requiredRadiusRatio = 1 - overlapTolerancePercent / 100;
   let bestPosition = {
     x: 50,
@@ -239,12 +228,8 @@ function findOpenPosition(
   };
 
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    const x =
-      safeEdgeMargins.x +
-      Math.random() * Math.max(0, 100 - safeEdgeMargins.x * 2);
-    const y =
-      safeEdgeMargins.y +
-      Math.random() * Math.max(0, 100 - safeEdgeMargins.y * 2);
+    const x = Math.random() * 100;
+    const y = Math.random() * 100;
     const clearance = Math.min(
       ...currentItems.map((item) => {
         const horizontalDistancePx =
@@ -357,6 +342,8 @@ function createFloatingItems(
         diagonalPx,
         maximumSafeDiagonalPx: maximumRenderedDiagonalPx,
         diagonalScale: 1,
+        imageWidthRatio: 1,
+        imageHeightRatio: 1,
         dissolveDurationMs: getRandomDissolveDurationMs(settings),
         transitionId: 0,
         isLeaving: false,
@@ -455,6 +442,8 @@ function createAddedFloatingItem(
     diagonalPx,
     maximumSafeDiagonalPx: maximumRenderedDiagonalPx,
     diagonalScale: 1,
+    imageWidthRatio: 1,
+    imageHeightRatio: 1,
     dissolveDurationMs: getRandomDissolveDurationMs(settings),
     transitionId: 0,
     isLeaving: false,
@@ -510,7 +499,11 @@ function changeFloatingItem(
             item.maximumSafeDiagonalPx,
           ),
           previousDiagonalScale: item.diagonalScale,
+          previousImageWidthRatio: item.imageWidthRatio,
+          previousImageHeightRatio: item.imageHeightRatio,
           diagonalScale: 1,
+          imageWidthRatio: item.imageWidthRatio,
+          imageHeightRatio: item.imageHeightRatio,
           dissolveDurationMs: getRandomDissolveDurationMs(settings),
           transitionId: item.transitionId + 1,
         }
@@ -888,6 +881,8 @@ export function Slideshow() {
                   previousImageIndex: undefined,
                   previousDiagonalPx: undefined,
                   previousDiagonalScale: undefined,
+                  previousImageWidthRatio: undefined,
+                  previousImageHeightRatio: undefined,
                 }
               : currentItem,
           ),
@@ -1193,12 +1188,22 @@ export function Slideshow() {
     const diagonalScale =
       Math.max(naturalWidth, naturalHeight) /
       Math.hypot(naturalWidth, naturalHeight);
+    const naturalDiagonal = Math.hypot(naturalWidth, naturalHeight);
+    const imageWidthRatio = naturalWidth / naturalDiagonal;
+    const imageHeightRatio = naturalHeight / naturalDiagonal;
 
     setFloatingItems((currentItems) =>
       currentItems.map((item) =>
         item.id === itemId &&
-        Math.abs(item.diagonalScale - diagonalScale) > 0.0001
-          ? { ...item, diagonalScale }
+        (Math.abs(item.diagonalScale - diagonalScale) > 0.0001 ||
+          Math.abs(item.imageWidthRatio - imageWidthRatio) > 0.0001 ||
+          Math.abs(item.imageHeightRatio - imageHeightRatio) > 0.0001)
+          ? {
+              ...item,
+              diagonalScale,
+              imageWidthRatio,
+              imageHeightRatio,
+            }
           : item,
       ),
     );
@@ -1292,15 +1297,44 @@ export function Slideshow() {
               item.previousImageIndex === undefined
                 ? undefined
                 : images[item.previousImageIndex];
+            const previousDiagonalPx =
+              item.previousDiagonalPx ?? item.diagonalPx;
+            const previousImageWidthRatio =
+              item.previousImageWidthRatio ?? item.imageWidthRatio;
+            const previousImageHeightRatio =
+              item.previousImageHeightRatio ?? item.imageHeightRatio;
+            const currentRotatedDimensions = getRotatedDimensions(
+              item.diagonalPx * item.imageWidthRatio,
+              item.diagonalPx * item.imageHeightRatio,
+              item.rotation,
+            );
+            const previousRotatedDimensions = getRotatedDimensions(
+              previousDiagonalPx * previousImageWidthRatio,
+              previousDiagonalPx * previousImageHeightRatio,
+              item.rotation,
+            );
+            const safeHalfWidthPx =
+              Math.max(
+                currentRotatedDimensions.width,
+                previousRotatedDimensions.width,
+              ) / 2;
+            const safeHalfHeightPx =
+              Math.max(
+                currentRotatedDimensions.height,
+                previousRotatedDimensions.height,
+              ) / 2;
             const floatingStyle = {
-              left: `${item.x}%`,
-              top: `${item.y}%`,
               zIndex: item.layer,
+              "--position-x": `${item.x}%`,
+              "--position-y": `${item.y}%`,
+              "--safe-half-width": `${safeHalfWidthPx}px`,
+              "--safe-half-height": `${safeHalfHeightPx}px`,
+              "--safe-drift-x": `${Math.abs(item.driftX)}vw`,
+              "--safe-drift-y": `${Math.abs(item.driftY)}svh`,
+              "--edge-gap": `${EDGE_GAP_PX}px`,
               "--image-size": `${item.diagonalPx}px`,
               "--image-diagonal-scale": item.diagonalScale,
-              "--previous-image-size": `${
-                item.previousDiagonalPx ?? item.diagonalPx
-              }px`,
+              "--previous-image-size": `${previousDiagonalPx}px`,
               "--previous-image-diagonal-scale":
                 item.previousDiagonalScale ?? item.diagonalScale,
               "--dissolve-duration": `${item.dissolveDurationMs}ms`,
