@@ -47,6 +47,10 @@ function randomSignedInteger(min: number, max: number) {
   return Math.random() < 0.5 ? -value : value;
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
 function shuffleIndexes(imageCount: number) {
   const indexes = Array.from({ length: imageCount }, (_, index) => index);
 
@@ -83,21 +87,46 @@ function createInitialIndexes(imageCount: number, displayCount: number) {
   return indexes;
 }
 
-function createFloatingItems(imageCount: number) {
+function createFloatingItems(imageCount: number, viewportWidth: number) {
   const displayCount = randomInteger(MIN_DISPLAY_COUNT, MAX_DISPLAY_COUNT);
+  const isMobile = viewportWidth <= 640;
+  const isTablet = viewportWidth > 640 && viewportWidth <= 1_000;
+  const columns = isMobile ? 3 : 4;
+  const rows = isMobile ? 4 : 3;
+  const jitterX = isMobile ? 1 : isTablet ? 5 : 4;
+  const jitterY = isMobile ? 3 : isTablet ? 2 : 4;
+  const minimumX = isMobile ? 17 : isTablet ? 8 : 10;
+  const minimumY = isMobile ? 10 : isTablet ? 17 : 12;
+  const placementIndexes = shuffleIndexes(MAX_DISPLAY_COUNT).slice(
+    0,
+    displayCount,
+  );
 
   return createInitialIndexes(imageCount, displayCount).map(
     (imageIndex, slotIndex) => {
       const floatDurationMs = randomInteger(7_000, 15_000);
+      const placementIndex = placementIndexes[slotIndex];
+      const column = placementIndex % columns;
+      const row = Math.floor(placementIndex / columns);
+      const anchorX = ((column + 0.5) / columns) * 100;
+      const anchorY = ((row + 0.5) / rows) * 100;
 
       return {
         id: `${Date.now()}-${slotIndex}-${Math.random()}`,
         imageIndex,
-        x: randomInteger(16, 84),
-        y: randomInteger(12, 88),
+        x: clamp(
+          anchorX + randomSignedInteger(0, jitterX),
+          minimumX,
+          100 - minimumX,
+        ),
+        y: clamp(
+          anchorY + randomSignedInteger(0, jitterY),
+          minimumY,
+          100 - minimumY,
+        ),
         sizePercent: randomInteger(80, 100),
-        driftX: randomSignedInteger(15, 45),
-        driftY: randomSignedInteger(12, 36),
+        driftX: randomSignedInteger(1, 2),
+        driftY: randomSignedInteger(1, 2),
         floatDurationMs,
         floatDelayMs: -randomInteger(0, floatDurationMs),
         rotation: randomSignedInteger(1, 4),
@@ -162,7 +191,9 @@ export function Slideshow() {
     void fetchImages(controller.signal).then((loadedImages) => {
       if (loadedImages) {
         setImages(loadedImages);
-        setFloatingItems(createFloatingItems(loadedImages.length));
+        setFloatingItems(
+          createFloatingItems(loadedImages.length, window.innerWidth),
+        );
       }
     });
 
@@ -255,7 +286,10 @@ export function Slideshow() {
       const refreshedImages = await fetchImages();
       if (refreshedImages) {
         setImages(refreshedImages);
-        const nextItems = createFloatingItems(refreshedImages.length);
+        const nextItems = createFloatingItems(
+          refreshedImages.length,
+          window.innerWidth,
+        );
         const uploadedIndex = refreshedImages.findIndex(
           (image) => image.key === lastUploadedKey,
         );
@@ -287,10 +321,10 @@ export function Slideshow() {
               left: `${item.x}%`,
               top: `${item.y}%`,
               zIndex: item.layer,
-              "--drift-x-start": `${-item.driftX}px`,
-              "--drift-y-start": `${-item.driftY}px`,
-              "--drift-x": `${item.driftX}px`,
-              "--drift-y": `${item.driftY}px`,
+              "--drift-x-start": `${-item.driftX}vw`,
+              "--drift-y-start": `${-item.driftY}svh`,
+              "--drift-x": `${item.driftX}vw`,
+              "--drift-y": `${item.driftY}svh`,
               "--float-duration": `${item.floatDurationMs}ms`,
               "--float-delay": `${item.floatDelayMs}ms`,
               "--rotation-start": `${-item.rotation}deg`,

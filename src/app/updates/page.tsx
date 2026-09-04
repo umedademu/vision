@@ -10,7 +10,15 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.006</h1>
+        <h1 className="updates-title">v0.007</h1>
+
+        <section className="updates-entry">
+          <h2>v0.007</h2>
+          <ul>
+            <li>画像同士が大きく重ならないよう配置を分散</li>
+            <li>浮遊時の重なりが3割程度までになるよう移動範囲を調整</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.006</h2>
