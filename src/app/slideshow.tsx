@@ -107,6 +107,7 @@ const LEGACY_MIN_IMAGE_LONG_SIDE_STORAGE_KEY =
 const LEGACY_MAX_IMAGE_LONG_SIDE_STORAGE_KEY =
   "vision-maximum-image-long-side-px";
 const EDGE_GAP_PX = 8;
+const POSITION_CANDIDATE_COUNT = 300;
 const CONTROLS_VISIBLE_MS = 8_000;
 
 function randomInteger(min: number, max: number) {
@@ -217,7 +218,7 @@ function findOpenPosition(
   viewportHeight: number,
   driftX: number,
   driftY: number,
-  maximumRenderedDiagonalPx: number,
+  diagonalPx: number,
   overlapTolerancePercent: number,
 ) {
   const requiredRadiusRatio = 1 - overlapTolerancePercent / 100;
@@ -227,7 +228,7 @@ function findOpenPosition(
     clearance: Number.NEGATIVE_INFINITY,
   };
 
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  for (let attempt = 0; attempt < POSITION_CANDIDATE_COUNT; attempt += 1) {
     const x = Math.random() * 100;
     const y = Math.random() * 100;
     const clearance = Math.min(
@@ -255,17 +256,12 @@ function findOpenPosition(
           closestVerticalDistancePx,
         );
         const requiredCenterDistancePx =
-          (maximumRenderedDiagonalPx / 2 +
-            item.maximumSafeDiagonalPx / 2) *
+          (diagonalPx / 2 + item.diagonalPx / 2) *
           requiredRadiusRatio;
 
         return closestCenterDistancePx - requiredCenterDistancePx;
       }),
     );
-
-    if (clearance >= 0) {
-      return { x, y, clearance };
-    }
 
     if (clearance > bestPosition.clearance) {
       bestPosition = { x, y, clearance };
@@ -330,7 +326,7 @@ function createFloatingItems(
         viewportHeight,
         driftX,
         driftY,
-        maximumRenderedDiagonalPx,
+        diagonalPx,
         settings.overlapTolerancePercent,
       );
 
@@ -424,7 +420,7 @@ function createAddedFloatingItem(
     viewportHeight,
     driftX,
     driftY,
-    maximumRenderedDiagonalPx,
+    diagonalPx,
     settings.overlapTolerancePercent,
   );
 

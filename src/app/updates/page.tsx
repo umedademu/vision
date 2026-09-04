@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.025</h1>
+        <h1 className="updates-title">v0.026</h1>
+
+        <section className="updates-entry">
+          <h2>v0.026</h2>
+          <ul>
+            <li>画像の配置時に画面全体から300か所の候補を比較</li>
+            <li>最も近い画像との距離が大きい空白箇所を優先</li>
+            <li>初回表示と途中で増える画像の両方に新しい配置方法を適用</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.025</h2>
