@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.007</h1>
+        <h1 className="updates-title">v0.008</h1>
+
+        <section className="updates-entry">
+          <h2>v0.008</h2>
+          <ul>
+            <li>常時表示する最大枚数の設定機能を追加</li>
+            <li>最小枚数を設定値から30%減らした枚数へ自動設定</li>
+            <li>設定した最大枚数をブラウザに保存</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.007</h2>

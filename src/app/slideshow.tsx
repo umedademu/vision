@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ChangeEvent, CSSProperties } from "react";
+import type { ChangeEvent, CSSProperties, FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 
 type ImageItem = {
@@ -33,8 +33,11 @@ type FloatingItem = {
   layer: number;
 };
 
-const MIN_DISPLAY_COUNT = 8;
-const MAX_DISPLAY_COUNT = 12;
+const DEFAULT_MAX_DISPLAY_COUNT = 12;
+const MIN_CONFIGURABLE_DISPLAY_COUNT = 1;
+const MAX_CONFIGURABLE_DISPLAY_COUNT = 12;
+const PLACEMENT_AREA_COUNT = 12;
+const DISPLAY_COUNT_STORAGE_KEY = "vision-maximum-display-count";
 const MIN_DISPLAY_INTERVAL_MS = 5_000;
 const MAX_DISPLAY_INTERVAL_MS = 10_000;
 
@@ -49,6 +52,10 @@ function randomSignedInteger(min: number, max: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function getMinimumDisplayCount(maximumDisplayCount: number) {
+  return Math.max(1, Math.round(maximumDisplayCount * 0.7));
 }
 
 function shuffleIndexes(imageCount: number) {
@@ -87,8 +94,15 @@ function createInitialIndexes(imageCount: number, displayCount: number) {
   return indexes;
 }
 
-function createFloatingItems(imageCount: number, viewportWidth: number) {
-  const displayCount = randomInteger(MIN_DISPLAY_COUNT, MAX_DISPLAY_COUNT);
+function createFloatingItems(
+  imageCount: number,
+  viewportWidth: number,
+  maximumDisplayCount: number,
+) {
+  const displayCount = randomInteger(
+    getMinimumDisplayCount(maximumDisplayCount),
+    maximumDisplayCount,
+  );
   const isMobile = viewportWidth <= 640;
   const isTablet = viewportWidth > 640 && viewportWidth <= 1_000;
   const columns = isMobile ? 3 : 4;
@@ -97,7 +111,7 @@ function createFloatingItems(imageCount: number, viewportWidth: number) {
   const jitterY = isMobile ? 3 : isTablet ? 2 : 4;
   const minimumX = isMobile ? 17 : isTablet ? 8 : 10;
   const minimumY = isMobile ? 10 : isTablet ? 17 : 12;
-  const placementIndexes = shuffleIndexes(MAX_DISPLAY_COUNT).slice(
+  const placementIndexes = shuffleIndexes(PLACEMENT_AREA_COUNT).slice(
     0,
     displayCount,
   );
@@ -182,17 +196,47 @@ async function fetchImages(signal?: AbortSignal) {
 export function Slideshow() {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [floatingItems, setFloatingItems] = useState<FloatingItem[]>([]);
+  const [maximumDisplayCount, setMaximumDisplayCount] = useState(
+    DEFAULT_MAX_DISPLAY_COUNT,
+  );
+  const [draftMaximumDisplayCount, setDraftMaximumDisplayCount] = useState(
+    String(DEFAULT_MAX_DISPLAY_COUNT),
+  );
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
+    const savedMaximumDisplayCount = Number.parseInt(
+      window.localStorage.getItem(DISPLAY_COUNT_STORAGE_KEY) ?? "",
+      10,
+    );
+    const initialMaximumDisplayCount = Number.isNaN(savedMaximumDisplayCount)
+      ? DEFAULT_MAX_DISPLAY_COUNT
+      : clamp(
+          savedMaximumDisplayCount,
+          MIN_CONFIGURABLE_DISPLAY_COUNT,
+          MAX_CONFIGURABLE_DISPLAY_COUNT,
+        );
+
     void fetchImages(controller.signal).then((loadedImages) => {
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      setMaximumDisplayCount(initialMaximumDisplayCount);
+      setDraftMaximumDisplayCount(String(initialMaximumDisplayCount));
+
       if (loadedImages) {
         setImages(loadedImages);
         setFloatingItems(
-          createFloatingItems(loadedImages.length, window.innerWidth),
+          createFloatingItems(
+            loadedImages.length,
+            window.innerWidth,
+            initialMaximumDisplayCount,
+          ),
         );
       }
     });
@@ -238,6 +282,36 @@ export function Slideshow() {
 
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [images.length, floatingItems.length]);
+
+  function handleDisplaySettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const enteredMaximumDisplayCount = Number.parseInt(
+      draftMaximumDisplayCount,
+      10,
+    );
+    const nextMaximumDisplayCount = Number.isNaN(enteredMaximumDisplayCount)
+      ? maximumDisplayCount
+      : clamp(
+          enteredMaximumDisplayCount,
+          MIN_CONFIGURABLE_DISPLAY_COUNT,
+          MAX_CONFIGURABLE_DISPLAY_COUNT,
+        );
+
+    window.localStorage.setItem(
+      DISPLAY_COUNT_STORAGE_KEY,
+      String(nextMaximumDisplayCount),
+    );
+    setMaximumDisplayCount(nextMaximumDisplayCount);
+    setDraftMaximumDisplayCount(String(nextMaximumDisplayCount));
+    setFloatingItems(
+      createFloatingItems(
+        images.length,
+        window.innerWidth,
+        nextMaximumDisplayCount,
+      ),
+    );
+    setIsSettingsOpen(false);
+  }
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const selectedFiles = Array.from(event.target.files ?? []);
@@ -289,6 +363,7 @@ export function Slideshow() {
         const nextItems = createFloatingItems(
           refreshedImages.length,
           window.innerWidth,
+          maximumDisplayCount,
         );
         const uploadedIndex = refreshedImages.findIndex(
           (image) => image.key === lastUploadedKey,
@@ -380,6 +455,48 @@ export function Slideshow() {
         <p className="upload-message" role="status">
           {uploadMessage}
         </p>
+      )}
+
+      <button
+        className="settings-button"
+        type="button"
+        aria-controls="display-settings"
+        aria-expanded={isSettingsOpen}
+        onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
+      >
+        表示枚数 {getMinimumDisplayCount(maximumDisplayCount)}〜
+        {maximumDisplayCount}
+      </button>
+
+      {isSettingsOpen && (
+        <form
+          id="display-settings"
+          className="settings-panel"
+          onSubmit={handleDisplaySettings}
+        >
+          <label className="settings-label" htmlFor="maximum-display-count">
+            最大枚数
+            <input
+              id="maximum-display-count"
+              className="settings-input"
+              type="number"
+              min={MIN_CONFIGURABLE_DISPLAY_COUNT}
+              max={MAX_CONFIGURABLE_DISPLAY_COUNT}
+              step="1"
+              required
+              value={draftMaximumDisplayCount}
+              onChange={(event) =>
+                setDraftMaximumDisplayCount(event.target.value)
+              }
+            />
+          </label>
+          <p className="settings-description">
+            最小枚数は、最大枚数から30%減らして自動設定します。
+          </p>
+          <button className="settings-submit" type="submit">
+            反映する
+          </button>
+        </form>
       )}
 
       <Link className="updates-link" href="/updates">
