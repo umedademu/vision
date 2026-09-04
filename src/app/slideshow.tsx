@@ -161,17 +161,11 @@ function getSafeEdgeMargins(
 function getMaximumSafeDiagonalPx(
   viewportWidth: number,
   viewportHeight: number,
-  cellWidthPercent: number,
-  cellHeightPercent: number,
   driftX: number,
   driftY: number,
 ) {
   const horizontalDriftPx = viewportWidth * (Math.abs(driftX) / 100);
   const verticalDriftPx = viewportHeight * (Math.abs(driftY) / 100);
-  const cellWidthPx = viewportWidth * (cellWidthPercent / 100);
-  const cellHeightPx = viewportHeight * (cellHeightPercent / 100);
-  const availableCellWidth = cellWidthPx * 1.25 - horizontalDriftPx * 2;
-  const availableCellHeight = cellHeightPx * 1.25 - verticalDriftPx * 2;
   const availableViewportWidth =
     viewportWidth - horizontalDriftPx * 2 - EDGE_GAP_PX * 2;
   const availableViewportHeight =
@@ -180,12 +174,7 @@ function getMaximumSafeDiagonalPx(
   return Math.max(
     1,
     Math.floor(
-      Math.min(
-        availableCellWidth,
-        availableCellHeight,
-        availableViewportWidth,
-        availableViewportHeight,
-      ),
+      Math.min(availableViewportWidth, availableViewportHeight),
     ),
   );
 }
@@ -339,8 +328,6 @@ function createFloatingItems(
       const maximumSafeDiagonalPx = getMaximumSafeDiagonalPx(
         viewportWidth,
         viewportHeight,
-        cellWidthPercent,
-        cellHeightPercent,
         driftX,
         driftY,
       );
@@ -430,8 +417,6 @@ function createAddedFloatingItem(
   const maximumSafeDiagonalPx = getMaximumSafeDiagonalPx(
     viewportWidth,
     viewportHeight,
-    cellWidthPercent,
-    cellHeightPercent,
     driftX,
     driftY,
   );

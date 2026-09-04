@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.023</h1>
+        <h1 className="updates-title">v0.024</h1>
+
+        <section className="updates-entry">
+          <h2>v0.024</h2>
+          <ul>
+            <li>表示枚数が多い場合も指定した画像サイズを維持するよう変更</li>
+            <li>配置しきれない場合は画像サイズではなく重なりを許容</li>
+            <li>画面外へのはみ出しを防ぐための縮小処理は維持</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.023</h2>
