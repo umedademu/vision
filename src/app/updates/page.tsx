@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.012</h1>
+        <h1 className="updates-title">v0.013</h1>
+
+        <section className="updates-entry">
+          <h2>v0.013</h2>
+          <ul>
+            <li>スマホ画面では画像以外の操作項目を通常時は非表示に変更</li>
+            <li>画面上部のタップで操作項目を一時表示する機能を追加</li>
+            <li>設定中と画像追加中は操作項目の表示を維持</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.012</h2>

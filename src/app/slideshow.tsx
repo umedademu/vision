@@ -71,6 +71,7 @@ const MAX_SWITCH_SECONDS_STORAGE_KEY = "vision-maximum-switch-seconds";
 const MIN_IMAGE_LONG_SIDE_STORAGE_KEY = "vision-minimum-image-long-side-px";
 const MAX_IMAGE_LONG_SIDE_STORAGE_KEY = "vision-maximum-image-long-side-px";
 const EDGE_GAP_PX = 8;
+const MOBILE_CONTROLS_VISIBLE_MS = 8_000;
 
 function randomInteger(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -363,6 +364,8 @@ export function Slideshow() {
       maximumImageLongSidePx: String(DEFAULT_MAX_IMAGE_LONG_SIDE_PX),
     });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [areMobileControlsVisible, setAreMobileControlsVisible] =
+    useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -569,6 +572,30 @@ export function Slideshow() {
       window.clearTimeout(resizeTimer);
     };
   }, [images.length, settings]);
+
+  useEffect(() => {
+    if (
+      !areMobileControlsVisible ||
+      isSettingsOpen ||
+      isUploading
+    ) {
+      return;
+    }
+
+    const hideTimer = window.setTimeout(() => {
+      setAreMobileControlsVisible(false);
+    }, MOBILE_CONTROLS_VISIBLE_MS);
+
+    return () => window.clearTimeout(hideTimer);
+  }, [areMobileControlsVisible, isSettingsOpen, isUploading]);
+
+  function handleMobileControlsToggle() {
+    if (areMobileControlsVisible) {
+      setIsSettingsOpen(false);
+    }
+
+    setAreMobileControlsVisible((areVisible) => !areVisible);
+  }
 
   function handleDisplaySettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -814,6 +841,18 @@ export function Slideshow() {
         <h1 className="slideshow-title">vision</h1>
       )}
 
+      <button
+        className="mobile-controls-trigger"
+        type="button"
+        aria-label={
+          areMobileControlsVisible
+            ? "操作項目を隠す"
+            : "操作項目を表示する"
+        }
+        aria-expanded={areMobileControlsVisible}
+        onClick={handleMobileControlsToggle}
+      />
+
       <input
         ref={fileInputRef}
         className="upload-input"
@@ -823,7 +862,9 @@ export function Slideshow() {
         onChange={handleUpload}
       />
       <button
-        className="upload-button"
+        className={`upload-button mobile-hideable ${
+          areMobileControlsVisible ? "mobile-controls-visible" : ""
+        }`}
         type="button"
         disabled={isUploading}
         onClick={() => fileInputRef.current?.click()}
@@ -832,13 +873,20 @@ export function Slideshow() {
       </button>
 
       {uploadMessage && (
-        <p className="upload-message" role="status">
+        <p
+          className={`upload-message mobile-hideable ${
+            areMobileControlsVisible ? "mobile-controls-visible" : ""
+          }`}
+          role="status"
+        >
           {uploadMessage}
         </p>
       )}
 
       <button
-        className="settings-button"
+        className={`settings-button mobile-hideable ${
+          areMobileControlsVisible ? "mobile-controls-visible" : ""
+        }`}
         type="button"
         aria-controls="display-settings"
         aria-expanded={isSettingsOpen}
@@ -853,7 +901,9 @@ export function Slideshow() {
       {isSettingsOpen && (
         <form
           id="display-settings"
-          className="settings-panel"
+          className={`settings-panel mobile-hideable ${
+            areMobileControlsVisible ? "mobile-controls-visible" : ""
+          }`}
           onSubmit={handleDisplaySettings}
         >
           <fieldset className="settings-group">
@@ -1001,7 +1051,12 @@ export function Slideshow() {
         </form>
       )}
 
-      <Link className="updates-link" href="/updates">
+      <Link
+        className={`updates-link mobile-hideable ${
+          areMobileControlsVisible ? "mobile-controls-visible" : ""
+        }`}
+        href="/updates"
+      >
         更新情報
       </Link>
     </main>
