@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.017</h1>
+        <h1 className="updates-title">v0.018</h1>
+
+        <section className="updates-entry">
+          <h2>v0.018</h2>
+          <ul>
+            <li>画像が切り替わるたびに表示枚数も1枚ずつ増減するよう変更</li>
+            <li>設定した最小枚数と最大枚数の範囲内で表示枚数を変動</li>
+            <li>枚数変更時の画像の移動を滑らかに調整</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.017</h2>

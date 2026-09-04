@@ -202,11 +202,19 @@ function createFloatingItems(
   viewportWidth: number,
   viewportHeight: number,
   settings: SlideshowSettings,
+  specifiedDisplayCount?: number,
 ) {
-  const displayCount = randomInteger(
-    settings.minimumDisplayCount,
-    settings.maximumDisplayCount,
-  );
+  const displayCount =
+    specifiedDisplayCount === undefined
+      ? randomInteger(
+          settings.minimumDisplayCount,
+          settings.maximumDisplayCount,
+        )
+      : clamp(
+          specifiedDisplayCount,
+          settings.minimumDisplayCount,
+          settings.maximumDisplayCount,
+        );
   const isMobile = viewportWidth <= 640;
   const layoutRatio = isMobile ? 3 / 4 : 4 / 3;
   const columns =
@@ -299,6 +307,135 @@ function createFloatingItems(
   );
 }
 
+function getNextDisplayCount(
+  currentDisplayCount: number,
+  minimumDisplayCount: number,
+  maximumDisplayCount: number,
+) {
+  if (minimumDisplayCount === maximumDisplayCount) {
+    return currentDisplayCount;
+  }
+
+  if (currentDisplayCount <= minimumDisplayCount) {
+    return currentDisplayCount + 1;
+  }
+
+  if (currentDisplayCount >= maximumDisplayCount) {
+    return currentDisplayCount - 1;
+  }
+
+  return currentDisplayCount + (Math.random() < 0.5 ? -1 : 1);
+}
+
+function changeFloatingItem(
+  currentItems: FloatingItem[],
+  changingItemId: string,
+  imageCount: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  settings: SlideshowSettings,
+) {
+  const changingItemIndex = currentItems.findIndex(
+    (item) => item.id === changingItemId,
+  );
+
+  if (changingItemIndex < 0) {
+    return currentItems;
+  }
+
+  const changingItem = currentItems[changingItemIndex];
+  const nextImageIndex = chooseNextIndex(
+    changingItem.imageIndex,
+    imageCount,
+    currentItems.map((item) => item.imageIndex),
+  );
+  const nextDisplayCount = getNextDisplayCount(
+    currentItems.length,
+    settings.minimumDisplayCount,
+    settings.maximumDisplayCount,
+  );
+
+  if (nextDisplayCount === currentItems.length) {
+    const nextItems = [...currentItems];
+    nextItems[changingItemIndex] = {
+      ...changingItem,
+      imageIndex: nextImageIndex,
+      diagonalPx: Math.min(
+        randomInteger(
+          settings.minimumImageDiagonalPx,
+          settings.maximumImageDiagonalPx,
+        ),
+        changingItem.maximumSafeDiagonalPx,
+      ),
+      diagonalScale: 1,
+    };
+    return nextItems;
+  }
+
+  const retainedItems = currentItems.map((item) =>
+    item.id === changingItemId
+      ? {
+          ...item,
+          imageIndex: nextImageIndex,
+          diagonalScale: 1,
+        }
+      : item,
+  );
+
+  if (nextDisplayCount < currentItems.length) {
+    const removableIndexes = retainedItems
+      .map((_, index) => index)
+      .filter((index) => index !== changingItemIndex);
+    const removeIndex =
+      removableIndexes[randomInteger(0, removableIndexes.length - 1)];
+    retainedItems.splice(removeIndex, 1);
+  }
+
+  const layoutItems = createFloatingItems(
+    imageCount,
+    viewportWidth,
+    viewportHeight,
+    settings,
+    nextDisplayCount,
+  );
+
+  return layoutItems.map((layoutItem, index) => {
+    const retainedItem = retainedItems[index];
+
+    if (!retainedItem) {
+      return {
+        ...layoutItem,
+        imageIndex: chooseNextIndex(
+          -1,
+          imageCount,
+          retainedItems.map((item) => item.imageIndex),
+        ),
+      };
+    }
+
+    const isChangingItem = retainedItem.id === changingItemId;
+
+    return {
+      ...layoutItem,
+      id: retainedItem.id,
+      imageIndex: retainedItem.imageIndex,
+      diagonalPx: isChangingItem
+        ? Math.min(
+            randomInteger(
+              settings.minimumImageDiagonalPx,
+              settings.maximumImageDiagonalPx,
+            ),
+            layoutItem.maximumSafeDiagonalPx,
+          )
+        : Math.min(
+            retainedItem.diagonalPx,
+            layoutItem.maximumSafeDiagonalPx,
+          ),
+      diagonalScale: retainedItem.diagonalScale,
+    };
+  });
+}
+
 function chooseNextIndex(
   currentIndex: number,
   imageCount: number,
@@ -367,6 +504,7 @@ export function Slideshow() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const switchTimersRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     const controller = new AbortController();
@@ -489,63 +627,57 @@ export function Slideshow() {
   }, []);
 
   useEffect(() => {
-    if (images.length < 2 || floatingItems.length === 0) {
+    const visibleItemIds = new Set(floatingItems.map((item) => item.id));
+
+    for (const [itemId, timer] of switchTimersRef.current) {
+      if (!visibleItemIds.has(itemId) || images.length < 2) {
+        window.clearTimeout(timer);
+        switchTimersRef.current.delete(itemId);
+      }
+    }
+
+    if (images.length < 2) {
       return;
     }
 
-    const timers: number[] = [];
+    for (const item of floatingItems) {
+      if (switchTimersRef.current.has(item.id)) {
+        continue;
+      }
 
-    function scheduleChange(slotIndex: number) {
-      timers[slotIndex] = window.setTimeout(
+      const itemId = item.id;
+      const timer = window.setTimeout(
         () => {
-          setFloatingItems((currentItems) => {
-            const currentItem = currentItems[slotIndex];
-
-            if (!currentItem) {
-              return currentItems;
-            }
-
-            const nextItems = [...currentItems];
-            nextItems[slotIndex] = {
-              ...currentItem,
-              imageIndex: chooseNextIndex(
-                currentItem.imageIndex,
-                images.length,
-                currentItems.map((item) => item.imageIndex),
-              ),
-              diagonalPx: Math.min(
-                randomInteger(
-                  settings.minimumImageDiagonalPx,
-                  settings.maximumImageDiagonalPx,
-                ),
-                currentItem.maximumSafeDiagonalPx,
-              ),
-              diagonalScale: 1,
-            };
-            return nextItems;
-          });
-          scheduleChange(slotIndex);
+          switchTimersRef.current.delete(itemId);
+          setFloatingItems((currentItems) =>
+            changeFloatingItem(
+              currentItems,
+              itemId,
+              images.length,
+              window.innerWidth,
+              window.innerHeight,
+              settings,
+            ),
+          );
         },
         randomInteger(
           settings.minimumSwitchSeconds * 1_000,
           settings.maximumSwitchSeconds * 1_000,
         ),
       );
+      switchTimersRef.current.set(itemId, timer);
     }
+  }, [floatingItems, images.length, settings]);
 
-    for (let slotIndex = 0; slotIndex < floatingItems.length; slotIndex += 1) {
-      scheduleChange(slotIndex);
-    }
-
-    return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [
-    images.length,
-    floatingItems.length,
-    settings.maximumImageDiagonalPx,
-    settings.maximumSwitchSeconds,
-    settings.minimumImageDiagonalPx,
-    settings.minimumSwitchSeconds,
-  ]);
+  useEffect(
+    () => () => {
+      for (const timer of switchTimersRef.current.values()) {
+        window.clearTimeout(timer);
+      }
+      switchTimersRef.current.clear();
+    },
+    [],
+  );
 
   useEffect(() => {
     if (images.length === 0) {

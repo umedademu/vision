@@ -78,6 +78,8 @@ body {
   height: var(--image-size);
   transform: translate(-50%, -50%);
   transition:
+    left 1.2s ease,
+    top 1.2s ease,
     width 1.2s ease,
     height 1.2s ease;
 }
