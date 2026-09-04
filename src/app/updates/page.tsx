@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.004</h1>
+        <h1 className="updates-title">v0.005</h1>
+
+        <section className="updates-entry">
+          <h2>v0.005</h2>
+          <ul>
+            <li>画面サイズに応じて8〜12枚の画像を同時表示</li>
+            <li>各画像が別々に5〜10秒ごとに切り替わる表示へ変更</li>
+            <li>同じ画像が同時に重なりにくいよう調整</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.004</h2>

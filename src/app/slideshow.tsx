@@ -18,15 +18,68 @@ type UploadUrlResponse = {
   uploadUrl?: string;
 };
 
-const DISPLAY_INTERVAL_MS = 5_000;
+const DISPLAY_SLOT_COUNT = 12;
+const MIN_DISPLAY_INTERVAL_MS = 5_000;
+const MAX_DISPLAY_INTERVAL_MS = 10_000;
 
-function chooseNextIndex(currentIndex: number, imageCount: number) {
+function randomInteger(min: number, max: number) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function shuffleIndexes(imageCount: number) {
+  const indexes = Array.from({ length: imageCount }, (_, index) => index);
+
+  for (let index = indexes.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomInteger(0, index);
+    [indexes[index], indexes[swapIndex]] = [
+      indexes[swapIndex],
+      indexes[index],
+    ];
+  }
+
+  return indexes;
+}
+
+function createInitialIndexes(imageCount: number) {
+  if (imageCount === 0) {
+    return [];
+  }
+
+  const indexes: number[] = [];
+
+  while (indexes.length < DISPLAY_SLOT_COUNT) {
+    const shuffled = shuffleIndexes(imageCount);
+
+    for (const index of shuffled) {
+      indexes.push(index);
+
+      if (indexes.length === DISPLAY_SLOT_COUNT) {
+        break;
+      }
+    }
+  }
+
+  return indexes;
+}
+
+function chooseNextIndex(
+  currentIndex: number,
+  imageCount: number,
+  visibleIndexes: number[],
+) {
   if (imageCount < 2) {
     return currentIndex;
   }
 
-  const offset = Math.floor(Math.random() * (imageCount - 1)) + 1;
-  return (currentIndex + offset) % imageCount;
+  const otherIndexes = Array.from({ length: imageCount }, (_, index) => index).filter(
+    (index) => index !== currentIndex,
+  );
+  const unusedIndexes = otherIndexes.filter(
+    (index) => !visibleIndexes.includes(index),
+  );
+  const candidates = unusedIndexes.length > 0 ? unusedIndexes : otherIndexes;
+
+  return candidates[randomInteger(0, candidates.length - 1)];
 }
 
 async function fetchImages(signal?: AbortSignal) {
@@ -53,7 +106,7 @@ async function fetchImages(signal?: AbortSignal) {
 
 export function Slideshow() {
   const [images, setImages] = useState<ImageItem[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [visibleIndexes, setVisibleIndexes] = useState<number[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -63,6 +116,7 @@ export function Slideshow() {
     void fetchImages(controller.signal).then((loadedImages) => {
       if (loadedImages) {
         setImages(loadedImages);
+        setVisibleIndexes(createInitialIndexes(loadedImages.length));
       }
     });
 
@@ -70,16 +124,33 @@ export function Slideshow() {
   }, []);
 
   useEffect(() => {
-    if (images.length < 2) {
+    if (images.length < 2 || visibleIndexes.length === 0) {
       return;
     }
 
-    const timer = window.setInterval(() => {
-      setCurrentIndex((current) => chooseNextIndex(current, images.length));
-    }, DISPLAY_INTERVAL_MS);
+    const timers: number[] = [];
 
-    return () => window.clearInterval(timer);
-  }, [images.length]);
+    function scheduleChange(slotIndex: number) {
+      timers[slotIndex] = window.setTimeout(() => {
+        setVisibleIndexes((currentIndexes) => {
+          const nextIndexes = [...currentIndexes];
+          nextIndexes[slotIndex] = chooseNextIndex(
+            currentIndexes[slotIndex],
+            images.length,
+            currentIndexes,
+          );
+          return nextIndexes;
+        });
+        scheduleChange(slotIndex);
+      }, randomInteger(MIN_DISPLAY_INTERVAL_MS, MAX_DISPLAY_INTERVAL_MS));
+    }
+
+    for (let slotIndex = 0; slotIndex < DISPLAY_SLOT_COUNT; slotIndex += 1) {
+      scheduleChange(slotIndex);
+    }
+
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [images.length, visibleIndexes.length]);
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const selectedFiles = Array.from(event.target.files ?? []);
@@ -126,12 +197,18 @@ export function Slideshow() {
       }
 
       const refreshedImages = await fetchImages();
-      const uploadedIndex =
-        refreshedImages?.findIndex((image) => image.key === lastUploadedKey) ?? -1;
-
       if (refreshedImages) {
         setImages(refreshedImages);
-        setCurrentIndex(uploadedIndex >= 0 ? uploadedIndex : 0);
+        const nextIndexes = createInitialIndexes(refreshedImages.length);
+        const uploadedIndex = refreshedImages.findIndex(
+          (image) => image.key === lastUploadedKey,
+        );
+
+        if (uploadedIndex >= 0) {
+          nextIndexes[0] = uploadedIndex;
+        }
+
+        setVisibleIndexes(nextIndexes);
       }
 
       setUploadMessage(`${selectedFiles.length}枚の画像を追加しました。`);
@@ -144,19 +221,27 @@ export function Slideshow() {
     }
   }
 
-  const currentImage = images[currentIndex];
-
   return (
     <main className="slideshow">
-      {currentImage ? (
-        // R2の署名付きURLをブラウザから直接読み込みます。
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={currentImage.key}
-          className="slideshow-image"
-          src={currentImage.url}
-          alt=""
-        />
+      {visibleIndexes.length > 0 ? (
+        <div className="slideshow-grid">
+          {visibleIndexes.map((imageIndex, slotIndex) => {
+            const image = images[imageIndex];
+
+            return (
+              <div className="slideshow-tile" key={slotIndex}>
+                {/* R2の署名付きURLをブラウザから直接読み込みます。 */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  key={image.key}
+                  className="slideshow-image"
+                  src={image.url}
+                  alt=""
+                />
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <h1 className="slideshow-title">vision</h1>
       )}
