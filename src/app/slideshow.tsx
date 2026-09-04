@@ -348,7 +348,7 @@ function createFloatingItems(
         floatDurationMs,
         floatDelayMs: -randomInteger(0, floatDurationMs),
         rotation,
-        layer: randomInteger(1, 5),
+        layer: slotIndex + 1,
       });
     },
   );
@@ -374,6 +374,10 @@ function getNextDisplayCount(
   }
 
   return currentDisplayCount + (Math.random() < 0.5 ? -1 : 1);
+}
+
+function getFrontLayer(items: FloatingItem[]) {
+  return Math.max(0, ...items.map((item) => item.layer)) + 1;
 }
 
 function createAddedFloatingItem(
@@ -448,7 +452,7 @@ function createAddedFloatingItem(
     floatDurationMs,
     floatDelayMs: -randomInteger(0, floatDurationMs),
     rotation: randomSignedInteger(1, 4),
-    layer: randomInteger(1, 5),
+    layer: getFrontLayer(currentItems),
   } satisfies FloatingItem;
 }
 
@@ -476,6 +480,7 @@ function changeFloatingItem(
     settings.minimumDisplayCount,
     settings.maximumDisplayCount,
   );
+  const frontLayer = getFrontLayer(currentItems);
   const changedItems = currentItems.map((item) =>
     item.id === changingItemId
       ? {
@@ -502,6 +507,7 @@ function changeFloatingItem(
           imageHeightRatio: item.imageHeightRatio,
           dissolveDurationMs: getRandomDissolveDurationMs(settings),
           transitionId: item.transitionId + 1,
+          layer: frontLayer,
         }
       : item,
   );

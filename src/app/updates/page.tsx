@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.027</h1>
+        <h1 className="updates-title">v0.028</h1>
+
+        <section className="updates-entry">
+          <h2>v0.028</h2>
+          <ul>
+            <li>後から表示された画像を常に最前面へ表示</li>
+            <li>画像の切り替え時にも新しい画像を一番手前へ移動</li>
+            <li>無作為だった画像の前後関係を表示順に統一</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.027</h2>
