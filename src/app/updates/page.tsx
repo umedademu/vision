@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.010</h1>
+        <h1 className="updates-title">v0.011</h1>
+
+        <section className="updates-entry">
+          <h2>v0.011</h2>
+          <ul>
+            <li>表示枚数の最小値と最大値を個別に設定可能に変更</li>
+            <li>画像の切替秒数の最小値と最大値を設定する機能を追加</li>
+            <li>表示枚数と切替秒数の設定をブラウザに保存</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.010</h2>

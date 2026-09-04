@@ -35,13 +35,33 @@ type FloatingItem = {
   layer: number;
 };
 
+type SlideshowSettings = {
+  minimumDisplayCount: number;
+  maximumDisplayCount: number;
+  minimumSwitchSeconds: number;
+  maximumSwitchSeconds: number;
+};
+
+type DraftSlideshowSettings = {
+  minimumDisplayCount: string;
+  maximumDisplayCount: string;
+  minimumSwitchSeconds: string;
+  maximumSwitchSeconds: string;
+};
+
+const DEFAULT_MIN_DISPLAY_COUNT = 8;
 const DEFAULT_MAX_DISPLAY_COUNT = 12;
+const DEFAULT_MIN_SWITCH_SECONDS = 5;
+const DEFAULT_MAX_SWITCH_SECONDS = 10;
 const MIN_CONFIGURABLE_DISPLAY_COUNT = 1;
 const MAX_CONFIGURABLE_DISPLAY_COUNT = 100;
-const DISPLAY_COUNT_STORAGE_KEY = "vision-maximum-display-count";
+const MIN_CONFIGURABLE_SWITCH_SECONDS = 1;
+const MAX_CONFIGURABLE_SWITCH_SECONDS = 3_600;
+const MIN_DISPLAY_COUNT_STORAGE_KEY = "vision-minimum-display-count";
+const MAX_DISPLAY_COUNT_STORAGE_KEY = "vision-maximum-display-count";
+const MIN_SWITCH_SECONDS_STORAGE_KEY = "vision-minimum-switch-seconds";
+const MAX_SWITCH_SECONDS_STORAGE_KEY = "vision-maximum-switch-seconds";
 const EDGE_GAP_PX = 8;
-const MIN_DISPLAY_INTERVAL_MS = 5_000;
-const MAX_DISPLAY_INTERVAL_MS = 10_000;
 
 function randomInteger(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -62,7 +82,7 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-function getMinimumDisplayCount(maximumDisplayCount: number) {
+function getLegacyMinimumDisplayCount(maximumDisplayCount: number) {
   return Math.max(1, Math.round(maximumDisplayCount * 0.7));
 }
 
@@ -153,10 +173,11 @@ function createFloatingItems(
   imageCount: number,
   viewportWidth: number,
   viewportHeight: number,
+  minimumDisplayCount: number,
   maximumDisplayCount: number,
 ) {
   const displayCount = randomInteger(
-    getMinimumDisplayCount(maximumDisplayCount),
+    minimumDisplayCount,
     maximumDisplayCount,
   );
   const isMobile = viewportWidth <= 640;
@@ -287,12 +308,19 @@ async function fetchImages(signal?: AbortSignal) {
 export function Slideshow() {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [floatingItems, setFloatingItems] = useState<FloatingItem[]>([]);
-  const [maximumDisplayCount, setMaximumDisplayCount] = useState(
-    DEFAULT_MAX_DISPLAY_COUNT,
-  );
-  const [draftMaximumDisplayCount, setDraftMaximumDisplayCount] = useState(
-    String(DEFAULT_MAX_DISPLAY_COUNT),
-  );
+  const [settings, setSettings] = useState<SlideshowSettings>({
+    minimumDisplayCount: DEFAULT_MIN_DISPLAY_COUNT,
+    maximumDisplayCount: DEFAULT_MAX_DISPLAY_COUNT,
+    minimumSwitchSeconds: DEFAULT_MIN_SWITCH_SECONDS,
+    maximumSwitchSeconds: DEFAULT_MAX_SWITCH_SECONDS,
+  });
+  const [draftSettings, setDraftSettings] =
+    useState<DraftSlideshowSettings>({
+      minimumDisplayCount: String(DEFAULT_MIN_DISPLAY_COUNT),
+      maximumDisplayCount: String(DEFAULT_MAX_DISPLAY_COUNT),
+      minimumSwitchSeconds: String(DEFAULT_MIN_SWITCH_SECONDS),
+      maximumSwitchSeconds: String(DEFAULT_MAX_SWITCH_SECONDS),
+    });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
@@ -301,7 +329,7 @@ export function Slideshow() {
   useEffect(() => {
     const controller = new AbortController();
     const savedMaximumDisplayCount = Number.parseInt(
-      window.localStorage.getItem(DISPLAY_COUNT_STORAGE_KEY) ?? "",
+      window.localStorage.getItem(MAX_DISPLAY_COUNT_STORAGE_KEY) ?? "",
       10,
     );
     const initialMaximumDisplayCount = Number.isNaN(savedMaximumDisplayCount)
@@ -311,14 +339,62 @@ export function Slideshow() {
           MIN_CONFIGURABLE_DISPLAY_COUNT,
           MAX_CONFIGURABLE_DISPLAY_COUNT,
         );
+    const savedMinimumDisplayCount = Number.parseInt(
+      window.localStorage.getItem(MIN_DISPLAY_COUNT_STORAGE_KEY) ?? "",
+      10,
+    );
+    const initialMinimumDisplayCount = Number.isNaN(savedMinimumDisplayCount)
+      ? getLegacyMinimumDisplayCount(initialMaximumDisplayCount)
+      : clamp(
+          savedMinimumDisplayCount,
+          MIN_CONFIGURABLE_DISPLAY_COUNT,
+          initialMaximumDisplayCount,
+        );
+    const savedMinimumSwitchSeconds = Number.parseInt(
+      window.localStorage.getItem(MIN_SWITCH_SECONDS_STORAGE_KEY) ?? "",
+      10,
+    );
+    const savedMaximumSwitchSeconds = Number.parseInt(
+      window.localStorage.getItem(MAX_SWITCH_SECONDS_STORAGE_KEY) ?? "",
+      10,
+    );
+    const initialMaximumSwitchSeconds = Number.isNaN(
+      savedMaximumSwitchSeconds,
+    )
+      ? DEFAULT_MAX_SWITCH_SECONDS
+      : clamp(
+          savedMaximumSwitchSeconds,
+          MIN_CONFIGURABLE_SWITCH_SECONDS,
+          MAX_CONFIGURABLE_SWITCH_SECONDS,
+        );
+    const initialMinimumSwitchSeconds = Number.isNaN(
+      savedMinimumSwitchSeconds,
+    )
+      ? DEFAULT_MIN_SWITCH_SECONDS
+      : clamp(
+          savedMinimumSwitchSeconds,
+          MIN_CONFIGURABLE_SWITCH_SECONDS,
+          initialMaximumSwitchSeconds,
+        );
+    const initialSettings = {
+      minimumDisplayCount: initialMinimumDisplayCount,
+      maximumDisplayCount: initialMaximumDisplayCount,
+      minimumSwitchSeconds: initialMinimumSwitchSeconds,
+      maximumSwitchSeconds: initialMaximumSwitchSeconds,
+    } satisfies SlideshowSettings;
 
     void fetchImages(controller.signal).then((loadedImages) => {
       if (controller.signal.aborted) {
         return;
       }
 
-      setMaximumDisplayCount(initialMaximumDisplayCount);
-      setDraftMaximumDisplayCount(String(initialMaximumDisplayCount));
+      setSettings(initialSettings);
+      setDraftSettings({
+        minimumDisplayCount: String(initialSettings.minimumDisplayCount),
+        maximumDisplayCount: String(initialSettings.maximumDisplayCount),
+        minimumSwitchSeconds: String(initialSettings.minimumSwitchSeconds),
+        maximumSwitchSeconds: String(initialSettings.maximumSwitchSeconds),
+      });
 
       if (loadedImages) {
         setImages(loadedImages);
@@ -327,7 +403,8 @@ export function Slideshow() {
             loadedImages.length,
             window.innerWidth,
             window.innerHeight,
-            initialMaximumDisplayCount,
+            initialSettings.minimumDisplayCount,
+            initialSettings.maximumDisplayCount,
           ),
         );
       }
@@ -344,28 +421,34 @@ export function Slideshow() {
     const timers: number[] = [];
 
     function scheduleChange(slotIndex: number) {
-      timers[slotIndex] = window.setTimeout(() => {
-        setFloatingItems((currentItems) => {
-          const currentItem = currentItems[slotIndex];
+      timers[slotIndex] = window.setTimeout(
+        () => {
+          setFloatingItems((currentItems) => {
+            const currentItem = currentItems[slotIndex];
 
-          if (!currentItem) {
-            return currentItems;
-          }
+            if (!currentItem) {
+              return currentItems;
+            }
 
-          const nextItems = [...currentItems];
-          nextItems[slotIndex] = {
-            ...currentItem,
-            imageIndex: chooseNextIndex(
-              currentItem.imageIndex,
-              images.length,
-              currentItems.map((item) => item.imageIndex),
-            ),
-            sizePercent: randomInteger(80, 100),
-          };
-          return nextItems;
-        });
-        scheduleChange(slotIndex);
-      }, randomInteger(MIN_DISPLAY_INTERVAL_MS, MAX_DISPLAY_INTERVAL_MS));
+            const nextItems = [...currentItems];
+            nextItems[slotIndex] = {
+              ...currentItem,
+              imageIndex: chooseNextIndex(
+                currentItem.imageIndex,
+                images.length,
+                currentItems.map((item) => item.imageIndex),
+              ),
+              sizePercent: randomInteger(80, 100),
+            };
+            return nextItems;
+          });
+          scheduleChange(slotIndex);
+        },
+        randomInteger(
+          settings.minimumSwitchSeconds * 1_000,
+          settings.maximumSwitchSeconds * 1_000,
+        ),
+      );
     }
 
     for (let slotIndex = 0; slotIndex < floatingItems.length; slotIndex += 1) {
@@ -373,7 +456,12 @@ export function Slideshow() {
     }
 
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [images.length, floatingItems.length]);
+  }, [
+    images.length,
+    floatingItems.length,
+    settings.maximumSwitchSeconds,
+    settings.minimumSwitchSeconds,
+  ]);
 
   useEffect(() => {
     if (images.length === 0) {
@@ -390,7 +478,8 @@ export function Slideshow() {
             images.length,
             window.innerWidth,
             window.innerHeight,
-            maximumDisplayCount,
+            settings.minimumDisplayCount,
+            settings.maximumDisplayCount,
           ),
         );
       }, 200);
@@ -402,34 +491,95 @@ export function Slideshow() {
       window.removeEventListener("resize", handleResize);
       window.clearTimeout(resizeTimer);
     };
-  }, [images.length, maximumDisplayCount]);
+  }, [
+    images.length,
+    settings.maximumDisplayCount,
+    settings.minimumDisplayCount,
+  ]);
 
   function handleDisplaySettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const enteredMinimumDisplayCount = Number.parseInt(
+      draftSettings.minimumDisplayCount,
+      10,
+    );
     const enteredMaximumDisplayCount = Number.parseInt(
-      draftMaximumDisplayCount,
+      draftSettings.maximumDisplayCount,
       10,
     );
     const nextMaximumDisplayCount = Number.isNaN(enteredMaximumDisplayCount)
-      ? maximumDisplayCount
+      ? settings.maximumDisplayCount
       : clamp(
           enteredMaximumDisplayCount,
           MIN_CONFIGURABLE_DISPLAY_COUNT,
           MAX_CONFIGURABLE_DISPLAY_COUNT,
         );
+    const nextMinimumDisplayCount = Number.isNaN(enteredMinimumDisplayCount)
+      ? settings.minimumDisplayCount
+      : clamp(
+          enteredMinimumDisplayCount,
+          MIN_CONFIGURABLE_DISPLAY_COUNT,
+          nextMaximumDisplayCount,
+        );
+    const enteredMinimumSwitchSeconds = Number.parseInt(
+      draftSettings.minimumSwitchSeconds,
+      10,
+    );
+    const enteredMaximumSwitchSeconds = Number.parseInt(
+      draftSettings.maximumSwitchSeconds,
+      10,
+    );
+    const nextMaximumSwitchSeconds = Number.isNaN(enteredMaximumSwitchSeconds)
+      ? settings.maximumSwitchSeconds
+      : clamp(
+          enteredMaximumSwitchSeconds,
+          MIN_CONFIGURABLE_SWITCH_SECONDS,
+          MAX_CONFIGURABLE_SWITCH_SECONDS,
+        );
+    const nextMinimumSwitchSeconds = Number.isNaN(enteredMinimumSwitchSeconds)
+      ? settings.minimumSwitchSeconds
+      : clamp(
+          enteredMinimumSwitchSeconds,
+          MIN_CONFIGURABLE_SWITCH_SECONDS,
+          nextMaximumSwitchSeconds,
+        );
+    const nextSettings = {
+      minimumDisplayCount: nextMinimumDisplayCount,
+      maximumDisplayCount: nextMaximumDisplayCount,
+      minimumSwitchSeconds: nextMinimumSwitchSeconds,
+      maximumSwitchSeconds: nextMaximumSwitchSeconds,
+    } satisfies SlideshowSettings;
 
     window.localStorage.setItem(
-      DISPLAY_COUNT_STORAGE_KEY,
-      String(nextMaximumDisplayCount),
+      MIN_DISPLAY_COUNT_STORAGE_KEY,
+      String(nextSettings.minimumDisplayCount),
     );
-    setMaximumDisplayCount(nextMaximumDisplayCount);
-    setDraftMaximumDisplayCount(String(nextMaximumDisplayCount));
+    window.localStorage.setItem(
+      MAX_DISPLAY_COUNT_STORAGE_KEY,
+      String(nextSettings.maximumDisplayCount),
+    );
+    window.localStorage.setItem(
+      MIN_SWITCH_SECONDS_STORAGE_KEY,
+      String(nextSettings.minimumSwitchSeconds),
+    );
+    window.localStorage.setItem(
+      MAX_SWITCH_SECONDS_STORAGE_KEY,
+      String(nextSettings.maximumSwitchSeconds),
+    );
+    setSettings(nextSettings);
+    setDraftSettings({
+      minimumDisplayCount: String(nextSettings.minimumDisplayCount),
+      maximumDisplayCount: String(nextSettings.maximumDisplayCount),
+      minimumSwitchSeconds: String(nextSettings.minimumSwitchSeconds),
+      maximumSwitchSeconds: String(nextSettings.maximumSwitchSeconds),
+    });
     setFloatingItems(
       createFloatingItems(
         images.length,
         window.innerWidth,
         window.innerHeight,
-        nextMaximumDisplayCount,
+        nextSettings.minimumDisplayCount,
+        nextSettings.maximumDisplayCount,
       ),
     );
     setIsSettingsOpen(false);
@@ -486,7 +636,8 @@ export function Slideshow() {
           refreshedImages.length,
           window.innerWidth,
           window.innerHeight,
-          maximumDisplayCount,
+          settings.minimumDisplayCount,
+          settings.maximumDisplayCount,
         );
         const uploadedIndex = refreshedImages.findIndex(
           (image) => image.key === lastUploadedKey,
@@ -589,8 +740,9 @@ export function Slideshow() {
         aria-expanded={isSettingsOpen}
         onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
       >
-        表示枚数 {getMinimumDisplayCount(maximumDisplayCount)}〜
-        {maximumDisplayCount}
+        表示 {settings.minimumDisplayCount}〜{settings.maximumDisplayCount}枚
+        ・切替 {settings.minimumSwitchSeconds}〜
+        {settings.maximumSwitchSeconds}秒
       </button>
 
       {isSettingsOpen && (
@@ -599,24 +751,98 @@ export function Slideshow() {
           className="settings-panel"
           onSubmit={handleDisplaySettings}
         >
-          <label className="settings-label" htmlFor="maximum-display-count">
-            最大枚数
-            <input
-              id="maximum-display-count"
-              className="settings-input"
-              type="number"
-              min={MIN_CONFIGURABLE_DISPLAY_COUNT}
-              max={MAX_CONFIGURABLE_DISPLAY_COUNT}
-              step="1"
-              required
-              value={draftMaximumDisplayCount}
-              onChange={(event) =>
-                setDraftMaximumDisplayCount(event.target.value)
-              }
-            />
-          </label>
+          <fieldset className="settings-group">
+            <legend>表示枚数</legend>
+            <div className="settings-range">
+              <label className="settings-label" htmlFor="minimum-display-count">
+                最小
+                <input
+                  id="minimum-display-count"
+                  className="settings-input"
+                  type="number"
+                  min={MIN_CONFIGURABLE_DISPLAY_COUNT}
+                  max={MAX_CONFIGURABLE_DISPLAY_COUNT}
+                  step="1"
+                  required
+                  value={draftSettings.minimumDisplayCount}
+                  onChange={(event) =>
+                    setDraftSettings((currentSettings) => ({
+                      ...currentSettings,
+                      minimumDisplayCount: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <span className="settings-separator">〜</span>
+              <label className="settings-label" htmlFor="maximum-display-count">
+                最大
+                <input
+                  id="maximum-display-count"
+                  className="settings-input"
+                  type="number"
+                  min={MIN_CONFIGURABLE_DISPLAY_COUNT}
+                  max={MAX_CONFIGURABLE_DISPLAY_COUNT}
+                  step="1"
+                  required
+                  value={draftSettings.maximumDisplayCount}
+                  onChange={(event) =>
+                    setDraftSettings((currentSettings) => ({
+                      ...currentSettings,
+                      maximumDisplayCount: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset className="settings-group">
+            <legend>切替秒数</legend>
+            <div className="settings-range">
+              <label className="settings-label" htmlFor="minimum-switch-seconds">
+                最小
+                <input
+                  id="minimum-switch-seconds"
+                  className="settings-input"
+                  type="number"
+                  min={MIN_CONFIGURABLE_SWITCH_SECONDS}
+                  max={MAX_CONFIGURABLE_SWITCH_SECONDS}
+                  step="1"
+                  required
+                  value={draftSettings.minimumSwitchSeconds}
+                  onChange={(event) =>
+                    setDraftSettings((currentSettings) => ({
+                      ...currentSettings,
+                      minimumSwitchSeconds: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <span className="settings-separator">〜</span>
+              <label className="settings-label" htmlFor="maximum-switch-seconds">
+                最大
+                <input
+                  id="maximum-switch-seconds"
+                  className="settings-input"
+                  type="number"
+                  min={MIN_CONFIGURABLE_SWITCH_SECONDS}
+                  max={MAX_CONFIGURABLE_SWITCH_SECONDS}
+                  step="1"
+                  required
+                  value={draftSettings.maximumSwitchSeconds}
+                  onChange={(event) =>
+                    setDraftSettings((currentSettings) => ({
+                      ...currentSettings,
+                      maximumSwitchSeconds: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+          </fieldset>
+
           <p className="settings-description">
-            最小枚数は、最大枚数から30%減らして自動設定します。
+            表示枚数は1〜100枚、切替秒数は1〜3600秒で設定できます。
           </p>
           <button className="settings-submit" type="submit">
             反映する
