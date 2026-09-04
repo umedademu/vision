@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.031</h1>
+        <h1 className="updates-title">v0.032</h1>
+
+        <section className="updates-entry">
+          <h2>v0.032</h2>
+          <ul>
+            <li>画像サイズの基準を対角線・長辺・短辺から選択可能に変更</li>
+            <li>選択した基準に合わせて最小・最大のピクセル数を適用し、設定を保存</li>
+            <li>画像の縦横比と画面の大きさに合わせて、はみ出しを防止</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.031</h2>

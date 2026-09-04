@@ -8,6 +8,13 @@ import type {
   SyntheticEvent,
 } from "react";
 import { useEffect, useRef, useState } from "react";
+import {
+  getImageSize,
+  getRotatedDimensions,
+  IMAGE_SIZE_BASIS_LABELS,
+  parseImageSizeBasis,
+  type ImageSizeBasis,
+} from "./image-size";
 
 type ImageItem = {
   key: string;
@@ -30,6 +37,7 @@ type FloatingItem = {
   previousImageIndex?: number;
   x: number;
   y: number;
+  requestedSizePx: number;
   diagonalPx: number;
   previousDiagonalPx?: number;
   maximumSafeDiagonalPx: number;
@@ -57,8 +65,9 @@ type SlideshowSettings = {
   maximumSwitchSeconds: number;
   minimumDissolveSeconds: number;
   maximumDissolveSeconds: number;
-  minimumImageDiagonalPx: number;
-  maximumImageDiagonalPx: number;
+  imageSizeBasis: ImageSizeBasis;
+  minimumImageSizePx: number;
+  maximumImageSizePx: number;
   overlapTolerancePercent: number;
 };
 
@@ -69,8 +78,9 @@ type DraftSlideshowSettings = {
   maximumSwitchSeconds: string;
   minimumDissolveSeconds: string;
   maximumDissolveSeconds: string;
-  minimumImageDiagonalPx: string;
-  maximumImageDiagonalPx: string;
+  imageSizeBasis: ImageSizeBasis;
+  minimumImageSizePx: string;
+  maximumImageSizePx: string;
   overlapTolerancePercent: string;
 };
 
@@ -80,8 +90,8 @@ const DEFAULT_MIN_SWITCH_SECONDS = 5;
 const DEFAULT_MAX_SWITCH_SECONDS = 10;
 const DEFAULT_MIN_DISSOLVE_SECONDS = 1;
 const DEFAULT_MAX_DISSOLVE_SECONDS = 1.5;
-const DEFAULT_MIN_IMAGE_DIAGONAL_PX = 160;
-const DEFAULT_MAX_IMAGE_DIAGONAL_PX = 280;
+const DEFAULT_MIN_IMAGE_SIZE_PX = 160;
+const DEFAULT_MAX_IMAGE_SIZE_PX = 280;
 const DEFAULT_OVERLAP_TOLERANCE_PERCENT = 30;
 const MIN_CONFIGURABLE_DISPLAY_COUNT = 1;
 const MAX_CONFIGURABLE_DISPLAY_COUNT = 100;
@@ -89,8 +99,8 @@ const MIN_CONFIGURABLE_SWITCH_SECONDS = 1;
 const MAX_CONFIGURABLE_SWITCH_SECONDS = 3_600;
 const MIN_CONFIGURABLE_DISSOLVE_SECONDS = 0.1;
 const MAX_CONFIGURABLE_DISSOLVE_SECONDS = 10;
-const MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX = 16;
-const MAX_CONFIGURABLE_IMAGE_DIAGONAL_PX = 4_000;
+const MIN_CONFIGURABLE_IMAGE_SIZE_PX = 16;
+const MAX_CONFIGURABLE_IMAGE_SIZE_PX = 4_000;
 const MIN_CONFIGURABLE_OVERLAP_TOLERANCE_PERCENT = 0;
 const MAX_CONFIGURABLE_OVERLAP_TOLERANCE_PERCENT = 100;
 const MIN_DISPLAY_COUNT_STORAGE_KEY = "vision-minimum-display-count";
@@ -99,8 +109,11 @@ const MIN_SWITCH_SECONDS_STORAGE_KEY = "vision-minimum-switch-seconds";
 const MAX_SWITCH_SECONDS_STORAGE_KEY = "vision-maximum-switch-seconds";
 const MIN_DISSOLVE_SECONDS_STORAGE_KEY = "vision-minimum-dissolve-seconds";
 const MAX_DISSOLVE_SECONDS_STORAGE_KEY = "vision-maximum-dissolve-seconds";
-const MIN_IMAGE_DIAGONAL_STORAGE_KEY = "vision-minimum-image-diagonal-px";
-const MAX_IMAGE_DIAGONAL_STORAGE_KEY = "vision-maximum-image-diagonal-px";
+const IMAGE_SIZE_BASIS_STORAGE_KEY = "vision-image-size-basis";
+const MIN_IMAGE_SIZE_STORAGE_KEY = "vision-minimum-image-size-px";
+const MAX_IMAGE_SIZE_STORAGE_KEY = "vision-maximum-image-size-px";
+const LEGACY_MIN_IMAGE_DIAGONAL_STORAGE_KEY = "vision-minimum-image-diagonal-px";
+const LEGACY_MAX_IMAGE_DIAGONAL_STORAGE_KEY = "vision-maximum-image-diagonal-px";
 const OVERLAP_TOLERANCE_STORAGE_KEY = "vision-overlap-tolerance-percent";
 const LEGACY_MIN_IMAGE_LONG_SIDE_STORAGE_KEY =
   "vision-minimum-image-long-side-px";
@@ -159,21 +172,6 @@ function getMaximumSafeDiagonalPx(
       Math.min(availableViewportWidth, availableViewportHeight),
     ),
   );
-}
-
-function getRotatedDimensions(
-  width: number,
-  height: number,
-  rotationDegrees: number,
-) {
-  const rotationRadians = (Math.abs(rotationDegrees) * Math.PI) / 180;
-  const cosine = Math.cos(rotationRadians);
-  const sine = Math.sin(rotationRadians);
-
-  return {
-    width: width * cosine + height * sine,
-    height: height * cosine + width * sine,
-  };
 }
 
 function shuffleIndexes(imageCount: number) {
@@ -299,9 +297,9 @@ function createFloatingItems(
   createInitialIndexes(imageCount, displayCount).forEach(
     (imageIndex, slotIndex) => {
       const floatDurationMs = randomInteger(7_000, 15_000);
-      const requestedDiagonalPx = randomInteger(
-        settings.minimumImageDiagonalPx,
-        settings.maximumImageDiagonalPx,
+      const requestedSizePx = randomInteger(
+        settings.minimumImageSizePx,
+        settings.maximumImageSizePx,
       );
       const driftX = randomSignedNumber(minimumDriftX, maximumDriftX);
       const driftY = randomSignedNumber(minimumDriftY, maximumDriftY);
@@ -313,11 +311,11 @@ function createFloatingItems(
         driftY,
       );
       const maximumRenderedDiagonalPx = Math.min(
-        settings.maximumImageDiagonalPx,
+        settings.maximumImageSizePx,
         maximumSafeDiagonalPx,
       );
       const diagonalPx = Math.min(
-        requestedDiagonalPx,
+        requestedSizePx,
         maximumRenderedDiagonalPx,
       );
       const position = findOpenPosition(
@@ -335,6 +333,7 @@ function createFloatingItems(
         imageIndex,
         x: position.x,
         y: position.y,
+        requestedSizePx,
         diagonalPx,
         maximumSafeDiagonalPx: maximumRenderedDiagonalPx,
         diagonalScale: 1,
@@ -408,14 +407,15 @@ function createAddedFloatingItem(
     driftY,
   );
   const maximumRenderedDiagonalPx = Math.min(
-    settings.maximumImageDiagonalPx,
+    settings.maximumImageSizePx,
     maximumSafeDiagonalPx,
   );
+  const requestedSizePx = randomInteger(
+    settings.minimumImageSizePx,
+    settings.maximumImageSizePx,
+  );
   const diagonalPx = Math.min(
-    randomInteger(
-      settings.minimumImageDiagonalPx,
-      settings.maximumImageDiagonalPx,
-    ),
+    requestedSizePx,
     maximumRenderedDiagonalPx,
   );
   const bestPosition = findOpenPosition(
@@ -439,6 +439,7 @@ function createAddedFloatingItem(
     ),
     x: bestPosition.x,
     y: bestPosition.y,
+    requestedSizePx,
     diagonalPx,
     maximumSafeDiagonalPx: maximumRenderedDiagonalPx,
     diagonalScale: 1,
@@ -481,6 +482,10 @@ function changeFloatingItem(
     settings.maximumDisplayCount,
   );
   const frontLayer = getFrontLayer(currentItems);
+  const requestedSizePx = randomInteger(
+    settings.minimumImageSizePx,
+    settings.maximumImageSizePx,
+  );
   const changedItems = currentItems.map((item) =>
     item.id === changingItemId
       ? {
@@ -492,11 +497,9 @@ function changeFloatingItem(
             currentItems.map((visibleItem) => visibleItem.imageIndex),
           ),
           previousDiagonalPx: item.diagonalPx,
+          requestedSizePx,
           diagonalPx: Math.min(
-            randomInteger(
-              settings.minimumImageDiagonalPx,
-              settings.maximumImageDiagonalPx,
-            ),
+            requestedSizePx,
             item.maximumSafeDiagonalPx,
           ),
           previousDiagonalScale: item.diagonalScale,
@@ -601,8 +604,9 @@ export function Slideshow() {
     maximumSwitchSeconds: DEFAULT_MAX_SWITCH_SECONDS,
     minimumDissolveSeconds: DEFAULT_MIN_DISSOLVE_SECONDS,
     maximumDissolveSeconds: DEFAULT_MAX_DISSOLVE_SECONDS,
-    minimumImageDiagonalPx: DEFAULT_MIN_IMAGE_DIAGONAL_PX,
-    maximumImageDiagonalPx: DEFAULT_MAX_IMAGE_DIAGONAL_PX,
+    imageSizeBasis: "diagonal",
+    minimumImageSizePx: DEFAULT_MIN_IMAGE_SIZE_PX,
+    maximumImageSizePx: DEFAULT_MAX_IMAGE_SIZE_PX,
     overlapTolerancePercent: DEFAULT_OVERLAP_TOLERANCE_PERCENT,
   });
   const [draftSettings, setDraftSettings] =
@@ -613,8 +617,9 @@ export function Slideshow() {
       maximumSwitchSeconds: String(DEFAULT_MAX_SWITCH_SECONDS),
       minimumDissolveSeconds: String(DEFAULT_MIN_DISSOLVE_SECONDS),
       maximumDissolveSeconds: String(DEFAULT_MAX_DISSOLVE_SECONDS),
-      minimumImageDiagonalPx: String(DEFAULT_MIN_IMAGE_DIAGONAL_PX),
-      maximumImageDiagonalPx: String(DEFAULT_MAX_IMAGE_DIAGONAL_PX),
+      imageSizeBasis: "diagonal",
+      minimumImageSizePx: String(DEFAULT_MIN_IMAGE_SIZE_PX),
+      maximumImageSizePx: String(DEFAULT_MAX_IMAGE_SIZE_PX),
       overlapTolerancePercent: String(DEFAULT_OVERLAP_TOLERANCE_PERCENT),
     });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -702,35 +707,37 @@ export function Slideshow() {
           MIN_CONFIGURABLE_DISSOLVE_SECONDS,
           initialMaximumDissolveSeconds,
         );
-    const savedMinimumImageDiagonalPx = Number.parseInt(
-      window.localStorage.getItem(MIN_IMAGE_DIAGONAL_STORAGE_KEY) ??
+    const savedMinimumImageSizePx = Number.parseInt(
+      window.localStorage.getItem(MIN_IMAGE_SIZE_STORAGE_KEY) ??
+        window.localStorage.getItem(LEGACY_MIN_IMAGE_DIAGONAL_STORAGE_KEY) ??
         window.localStorage.getItem(LEGACY_MIN_IMAGE_LONG_SIDE_STORAGE_KEY) ??
         "",
       10,
     );
-    const savedMaximumImageDiagonalPx = Number.parseInt(
-      window.localStorage.getItem(MAX_IMAGE_DIAGONAL_STORAGE_KEY) ??
+    const savedMaximumImageSizePx = Number.parseInt(
+      window.localStorage.getItem(MAX_IMAGE_SIZE_STORAGE_KEY) ??
+        window.localStorage.getItem(LEGACY_MAX_IMAGE_DIAGONAL_STORAGE_KEY) ??
         window.localStorage.getItem(LEGACY_MAX_IMAGE_LONG_SIDE_STORAGE_KEY) ??
         "",
       10,
     );
-    const initialMaximumImageDiagonalPx = Number.isNaN(
-      savedMaximumImageDiagonalPx,
+    const initialMaximumImageSizePx = Number.isNaN(
+      savedMaximumImageSizePx,
     )
-      ? DEFAULT_MAX_IMAGE_DIAGONAL_PX
+      ? DEFAULT_MAX_IMAGE_SIZE_PX
       : clamp(
-          savedMaximumImageDiagonalPx,
-          MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX,
-          MAX_CONFIGURABLE_IMAGE_DIAGONAL_PX,
+          savedMaximumImageSizePx,
+          MIN_CONFIGURABLE_IMAGE_SIZE_PX,
+          MAX_CONFIGURABLE_IMAGE_SIZE_PX,
         );
-    const initialMinimumImageDiagonalPx = Number.isNaN(
-      savedMinimumImageDiagonalPx,
+    const initialMinimumImageSizePx = Number.isNaN(
+      savedMinimumImageSizePx,
     )
-      ? DEFAULT_MIN_IMAGE_DIAGONAL_PX
+      ? DEFAULT_MIN_IMAGE_SIZE_PX
       : clamp(
-          savedMinimumImageDiagonalPx,
-          MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX,
-          initialMaximumImageDiagonalPx,
+          savedMinimumImageSizePx,
+          MIN_CONFIGURABLE_IMAGE_SIZE_PX,
+          initialMaximumImageSizePx,
         );
     const savedOverlapTolerancePercent = Number.parseInt(
       window.localStorage.getItem(OVERLAP_TOLERANCE_STORAGE_KEY) ?? "",
@@ -752,8 +759,11 @@ export function Slideshow() {
       maximumSwitchSeconds: initialMaximumSwitchSeconds,
       minimumDissolveSeconds: initialMinimumDissolveSeconds,
       maximumDissolveSeconds: initialMaximumDissolveSeconds,
-      minimumImageDiagonalPx: initialMinimumImageDiagonalPx,
-      maximumImageDiagonalPx: initialMaximumImageDiagonalPx,
+      imageSizeBasis: parseImageSizeBasis(
+        window.localStorage.getItem(IMAGE_SIZE_BASIS_STORAGE_KEY),
+      ),
+      minimumImageSizePx: initialMinimumImageSizePx,
+      maximumImageSizePx: initialMaximumImageSizePx,
       overlapTolerancePercent: initialOverlapTolerancePercent,
     } satisfies SlideshowSettings;
 
@@ -774,8 +784,9 @@ export function Slideshow() {
         maximumDissolveSeconds: String(
           initialSettings.maximumDissolveSeconds,
         ),
-        minimumImageDiagonalPx: String(initialSettings.minimumImageDiagonalPx),
-        maximumImageDiagonalPx: String(initialSettings.maximumImageDiagonalPx),
+        minimumImageSizePx: String(initialSettings.minimumImageSizePx),
+        maximumImageSizePx: String(initialSettings.maximumImageSizePx),
+        imageSizeBasis: initialSettings.imageSizeBasis,
         overlapTolerancePercent: String(
           initialSettings.overlapTolerancePercent,
         ),
@@ -1088,31 +1099,31 @@ export function Slideshow() {
           MIN_CONFIGURABLE_DISSOLVE_SECONDS,
           nextMaximumDissolveSeconds,
         );
-    const enteredMinimumImageDiagonalPx = Number.parseInt(
-      draftSettings.minimumImageDiagonalPx,
+    const enteredMinimumImageSizePx = Number.parseInt(
+      draftSettings.minimumImageSizePx,
       10,
     );
-    const enteredMaximumImageDiagonalPx = Number.parseInt(
-      draftSettings.maximumImageDiagonalPx,
+    const enteredMaximumImageSizePx = Number.parseInt(
+      draftSettings.maximumImageSizePx,
       10,
     );
-    const nextMaximumImageDiagonalPx = Number.isNaN(
-      enteredMaximumImageDiagonalPx,
+    const nextMaximumImageSizePx = Number.isNaN(
+      enteredMaximumImageSizePx,
     )
-      ? settings.maximumImageDiagonalPx
+      ? settings.maximumImageSizePx
       : clamp(
-          enteredMaximumImageDiagonalPx,
-          MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX,
-          MAX_CONFIGURABLE_IMAGE_DIAGONAL_PX,
+          enteredMaximumImageSizePx,
+          MIN_CONFIGURABLE_IMAGE_SIZE_PX,
+          MAX_CONFIGURABLE_IMAGE_SIZE_PX,
         );
-    const nextMinimumImageDiagonalPx = Number.isNaN(
-      enteredMinimumImageDiagonalPx,
+    const nextMinimumImageSizePx = Number.isNaN(
+      enteredMinimumImageSizePx,
     )
-      ? settings.minimumImageDiagonalPx
+      ? settings.minimumImageSizePx
       : clamp(
-          enteredMinimumImageDiagonalPx,
-          MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX,
-          nextMaximumImageDiagonalPx,
+          enteredMinimumImageSizePx,
+          MIN_CONFIGURABLE_IMAGE_SIZE_PX,
+          nextMaximumImageSizePx,
         );
     const enteredOverlapTolerancePercent = Number.parseInt(
       draftSettings.overlapTolerancePercent,
@@ -1134,8 +1145,9 @@ export function Slideshow() {
       maximumSwitchSeconds: nextMaximumSwitchSeconds,
       minimumDissolveSeconds: nextMinimumDissolveSeconds,
       maximumDissolveSeconds: nextMaximumDissolveSeconds,
-      minimumImageDiagonalPx: nextMinimumImageDiagonalPx,
-      maximumImageDiagonalPx: nextMaximumImageDiagonalPx,
+      imageSizeBasis: draftSettings.imageSizeBasis,
+      minimumImageSizePx: nextMinimumImageSizePx,
+      maximumImageSizePx: nextMaximumImageSizePx,
       overlapTolerancePercent: nextOverlapTolerancePercent,
     } satisfies SlideshowSettings;
 
@@ -1164,12 +1176,16 @@ export function Slideshow() {
       String(nextSettings.maximumDissolveSeconds),
     );
     window.localStorage.setItem(
-      MIN_IMAGE_DIAGONAL_STORAGE_KEY,
-      String(nextSettings.minimumImageDiagonalPx),
+      MIN_IMAGE_SIZE_STORAGE_KEY,
+      String(nextSettings.minimumImageSizePx),
     );
     window.localStorage.setItem(
-      MAX_IMAGE_DIAGONAL_STORAGE_KEY,
-      String(nextSettings.maximumImageDiagonalPx),
+      MAX_IMAGE_SIZE_STORAGE_KEY,
+      String(nextSettings.maximumImageSizePx),
+    );
+    window.localStorage.setItem(
+      IMAGE_SIZE_BASIS_STORAGE_KEY,
+      nextSettings.imageSizeBasis,
     );
     window.localStorage.setItem(
       OVERLAP_TOLERANCE_STORAGE_KEY,
@@ -1183,8 +1199,9 @@ export function Slideshow() {
       maximumSwitchSeconds: String(nextSettings.maximumSwitchSeconds),
       minimumDissolveSeconds: String(nextSettings.minimumDissolveSeconds),
       maximumDissolveSeconds: String(nextSettings.maximumDissolveSeconds),
-      minimumImageDiagonalPx: String(nextSettings.minimumImageDiagonalPx),
-      maximumImageDiagonalPx: String(nextSettings.maximumImageDiagonalPx),
+      minimumImageSizePx: String(nextSettings.minimumImageSizePx),
+      maximumImageSizePx: String(nextSettings.maximumImageSizePx),
+      imageSizeBasis: nextSettings.imageSizeBasis,
       overlapTolerancePercent: String(nextSettings.overlapTolerancePercent),
     });
     setFloatingItems(
@@ -1200,6 +1217,7 @@ export function Slideshow() {
 
   function handleImageLoad(
     itemId: string,
+    transitionId: number,
     event: SyntheticEvent<HTMLImageElement>,
   ) {
     const { naturalWidth, naturalHeight } = event.currentTarget;
@@ -1208,27 +1226,27 @@ export function Slideshow() {
       return;
     }
 
-    const diagonalScale =
-      Math.max(naturalWidth, naturalHeight) /
-      Math.hypot(naturalWidth, naturalHeight);
-    const naturalDiagonal = Math.hypot(naturalWidth, naturalHeight);
-    const imageWidthRatio = naturalWidth / naturalDiagonal;
-    const imageHeightRatio = naturalHeight / naturalDiagonal;
-
     setFloatingItems((currentItems) =>
-      currentItems.map((item) =>
-        item.id === itemId &&
-        (Math.abs(item.diagonalScale - diagonalScale) > 0.0001 ||
-          Math.abs(item.imageWidthRatio - imageWidthRatio) > 0.0001 ||
-          Math.abs(item.imageHeightRatio - imageHeightRatio) > 0.0001)
-          ? {
-              ...item,
-              diagonalScale,
-              imageWidthRatio,
-              imageHeightRatio,
-            }
-          : item,
-      ),
+      currentItems.map((item) => {
+        if (item.id !== itemId || item.transitionId !== transitionId) {
+          return item;
+        }
+
+        const imageSize = getImageSize({
+          requestedSizePx: item.requestedSizePx,
+          basis: settings.imageSizeBasis,
+          naturalWidth,
+          naturalHeight,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+          driftX: item.driftX,
+          driftY: item.driftY,
+          rotation: item.rotation,
+          edgeGapPx: EDGE_GAP_PX,
+        });
+
+        return { ...item, ...imageSize };
+      }),
     );
   }
 
@@ -1396,7 +1414,9 @@ export function Slideshow() {
                     className="slideshow-image slideshow-image-current"
                     src={image.url}
                     alt=""
-                    onLoad={(event) => handleImageLoad(item.id, event)}
+                    onLoad={(event) =>
+                      handleImageLoad(item.id, item.transitionId, event)
+                    }
                   />
                 </div>
               </div>
@@ -1462,8 +1482,9 @@ export function Slideshow() {
         ・間隔 {settings.minimumSwitchSeconds}〜
         {settings.maximumSwitchSeconds}秒・切替時間{" "}
         {settings.minimumDissolveSeconds}〜
-        {settings.maximumDissolveSeconds}秒・対角線
-        {settings.minimumImageDiagonalPx}〜{settings.maximumImageDiagonalPx}px
+        {settings.maximumDissolveSeconds}秒・
+        {IMAGE_SIZE_BASIS_LABELS[settings.imageSizeBasis]}
+        {settings.minimumImageSizePx}〜{settings.maximumImageSizePx}px
         ・重なり許容 {settings.overlapTolerancePercent}%
       </button>
 
@@ -1617,7 +1638,28 @@ export function Slideshow() {
           </fieldset>
 
           <fieldset className="settings-group">
-            <legend>画像の対角線（px）</legend>
+            <legend>画像サイズの基準</legend>
+            <select
+              className="settings-input"
+              aria-label="画像サイズの基準"
+              value={draftSettings.imageSizeBasis}
+              onChange={(event) =>
+                setDraftSettings((currentSettings) => ({
+                  ...currentSettings,
+                  imageSizeBasis: parseImageSizeBasis(event.target.value),
+                }))
+              }
+            >
+              <option value="diagonal">対角線</option>
+              <option value="long-side">長辺</option>
+              <option value="short-side">短辺</option>
+            </select>
+          </fieldset>
+
+          <fieldset className="settings-group">
+            <legend>
+              画像の{IMAGE_SIZE_BASIS_LABELS[draftSettings.imageSizeBasis]}（px）
+            </legend>
             <div className="settings-range">
               <label className="settings-label" htmlFor="minimum-image-size">
                 最小
@@ -1625,15 +1667,15 @@ export function Slideshow() {
                   id="minimum-image-size"
                   className="settings-input"
                   type="number"
-                  min={MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX}
-                  max={MAX_CONFIGURABLE_IMAGE_DIAGONAL_PX}
+                  min={MIN_CONFIGURABLE_IMAGE_SIZE_PX}
+                  max={MAX_CONFIGURABLE_IMAGE_SIZE_PX}
                   step="1"
                   required
-                  value={draftSettings.minimumImageDiagonalPx}
+                  value={draftSettings.minimumImageSizePx}
                   onChange={(event) =>
                     setDraftSettings((currentSettings) => ({
                       ...currentSettings,
-                      minimumImageDiagonalPx: event.target.value,
+                      minimumImageSizePx: event.target.value,
                     }))
                   }
                 />
@@ -1645,15 +1687,15 @@ export function Slideshow() {
                   id="maximum-image-size"
                   className="settings-input"
                   type="number"
-                  min={MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX}
-                  max={MAX_CONFIGURABLE_IMAGE_DIAGONAL_PX}
+                  min={MIN_CONFIGURABLE_IMAGE_SIZE_PX}
+                  max={MAX_CONFIGURABLE_IMAGE_SIZE_PX}
                   step="1"
                   required
-                  value={draftSettings.maximumImageDiagonalPx}
+                  value={draftSettings.maximumImageSizePx}
                   onChange={(event) =>
                     setDraftSettings((currentSettings) => ({
                       ...currentSettings,
-                      maximumImageDiagonalPx: event.target.value,
+                      maximumImageSizePx: event.target.value,
                     }))
                   }
                 />
