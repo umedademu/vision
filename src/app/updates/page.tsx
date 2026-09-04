@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.029</h1>
+        <h1 className="updates-title">v0.030</h1>
+
+        <section className="updates-entry">
+          <h2>v0.030</h2>
+          <ul>
+            <li>トップページの初期状態で操作項目を表示</li>
+            <li>PCのキー操作で表示と非表示を切り替え</li>
+            <li>画面上部のクリックやタップでも同じ切り替え動作を維持</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.029</h2>

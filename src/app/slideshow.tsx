@@ -618,7 +618,7 @@ export function Slideshow() {
       overlapTolerancePercent: String(DEFAULT_OVERLAP_TOLERANCE_PERCENT),
     });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [areControlsVisible, setAreControlsVisible] = useState(false);
+  const [areControlsVisible, setAreControlsVisible] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1004,7 +1004,8 @@ export function Slideshow() {
         return;
       }
 
-      setAreControlsVisible(true);
+      setIsSettingsOpen(false);
+      setAreControlsVisible((areVisible) => !areVisible);
     }
 
     window.addEventListener("keydown", handleKeyDown);
@@ -1013,10 +1014,7 @@ export function Slideshow() {
   }, []);
 
   function handleControlsToggle() {
-    if (areControlsVisible) {
-      setIsSettingsOpen(false);
-    }
-
+    setIsSettingsOpen(false);
     setAreControlsVisible((areVisible) => !areVisible);
   }
 
