@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.030</h1>
+        <h1 className="updates-title">v0.031</h1>
+
+        <section className="updates-entry">
+          <h2>v0.031</h2>
+          <ul>
+            <li>表示中の操作項目を画像より常に前面へ配置</li>
+            <li>画像同士の重なり順と操作項目の前後関係を分離</li>
+            <li>長時間表示しても画像が操作項目を覆わないよう改善</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.030</h2>
