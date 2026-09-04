@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.016</h1>
+        <h1 className="updates-title">v0.017</h1>
+
+        <section className="updates-entry">
+          <h2>v0.017</h2>
+          <ul>
+            <li>画像サイズの基準を長辺から対角線の長さへ変更</li>
+            <li>縦横比が異なる画像同士の見た目の大きさの差を軽減</li>
+            <li>従来の画像サイズ設定値を対角線設定として引き継ぐ処理を追加</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.016</h2>

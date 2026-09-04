@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import type { ChangeEvent, CSSProperties, FormEvent } from "react";
+import type {
+  ChangeEvent,
+  CSSProperties,
+  FormEvent,
+  SyntheticEvent,
+} from "react";
 import { useEffect, useRef, useState } from "react";
 
 type ImageItem = {
@@ -24,8 +29,9 @@ type FloatingItem = {
   imageIndex: number;
   x: number;
   y: number;
-  longSidePx: number;
-  maximumSafeLongSidePx: number;
+  diagonalPx: number;
+  maximumSafeDiagonalPx: number;
+  diagonalScale: number;
   driftX: number;
   driftY: number;
   floatDurationMs: number;
@@ -39,8 +45,8 @@ type SlideshowSettings = {
   maximumDisplayCount: number;
   minimumSwitchSeconds: number;
   maximumSwitchSeconds: number;
-  minimumImageLongSidePx: number;
-  maximumImageLongSidePx: number;
+  minimumImageDiagonalPx: number;
+  maximumImageDiagonalPx: number;
 };
 
 type DraftSlideshowSettings = {
@@ -48,28 +54,32 @@ type DraftSlideshowSettings = {
   maximumDisplayCount: string;
   minimumSwitchSeconds: string;
   maximumSwitchSeconds: string;
-  minimumImageLongSidePx: string;
-  maximumImageLongSidePx: string;
+  minimumImageDiagonalPx: string;
+  maximumImageDiagonalPx: string;
 };
 
 const DEFAULT_MIN_DISPLAY_COUNT = 8;
 const DEFAULT_MAX_DISPLAY_COUNT = 12;
 const DEFAULT_MIN_SWITCH_SECONDS = 5;
 const DEFAULT_MAX_SWITCH_SECONDS = 10;
-const DEFAULT_MIN_IMAGE_LONG_SIDE_PX = 160;
-const DEFAULT_MAX_IMAGE_LONG_SIDE_PX = 280;
+const DEFAULT_MIN_IMAGE_DIAGONAL_PX = 160;
+const DEFAULT_MAX_IMAGE_DIAGONAL_PX = 280;
 const MIN_CONFIGURABLE_DISPLAY_COUNT = 1;
 const MAX_CONFIGURABLE_DISPLAY_COUNT = 100;
 const MIN_CONFIGURABLE_SWITCH_SECONDS = 1;
 const MAX_CONFIGURABLE_SWITCH_SECONDS = 3_600;
-const MIN_CONFIGURABLE_IMAGE_LONG_SIDE_PX = 16;
-const MAX_CONFIGURABLE_IMAGE_LONG_SIDE_PX = 4_000;
+const MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX = 16;
+const MAX_CONFIGURABLE_IMAGE_DIAGONAL_PX = 4_000;
 const MIN_DISPLAY_COUNT_STORAGE_KEY = "vision-minimum-display-count";
 const MAX_DISPLAY_COUNT_STORAGE_KEY = "vision-maximum-display-count";
 const MIN_SWITCH_SECONDS_STORAGE_KEY = "vision-minimum-switch-seconds";
 const MAX_SWITCH_SECONDS_STORAGE_KEY = "vision-maximum-switch-seconds";
-const MIN_IMAGE_LONG_SIDE_STORAGE_KEY = "vision-minimum-image-long-side-px";
-const MAX_IMAGE_LONG_SIDE_STORAGE_KEY = "vision-maximum-image-long-side-px";
+const MIN_IMAGE_DIAGONAL_STORAGE_KEY = "vision-minimum-image-diagonal-px";
+const MAX_IMAGE_DIAGONAL_STORAGE_KEY = "vision-maximum-image-diagonal-px";
+const LEGACY_MIN_IMAGE_LONG_SIDE_STORAGE_KEY =
+  "vision-minimum-image-long-side-px";
+const LEGACY_MAX_IMAGE_LONG_SIDE_STORAGE_KEY =
+  "vision-maximum-image-long-side-px";
 const EDGE_GAP_PX = 8;
 const CONTROLS_VISIBLE_MS = 8_000;
 
@@ -99,25 +109,19 @@ function getLegacyMinimumDisplayCount(maximumDisplayCount: number) {
 function getSafeEdgeMargins(
   viewportWidth: number,
   viewportHeight: number,
-  rotation: number,
   driftX: number,
   driftY: number,
-  longSidePx: number,
+  diagonalPx: number,
 ) {
-  const rotationRadians = (Math.abs(rotation) * Math.PI) / 180;
-  const rotatedSize =
-    longSidePx *
-    (Math.cos(rotationRadians) + Math.sin(rotationRadians));
-
   return {
     x:
-      ((rotatedSize / 2 +
+      ((diagonalPx / 2 +
         viewportWidth * (Math.abs(driftX) / 100) +
         EDGE_GAP_PX) /
         viewportWidth) *
       100,
     y:
-      ((rotatedSize / 2 +
+      ((diagonalPx / 2 +
         viewportHeight * (Math.abs(driftY) / 100) +
         EDGE_GAP_PX) /
         viewportHeight) *
@@ -125,18 +129,14 @@ function getSafeEdgeMargins(
   };
 }
 
-function getMaximumSafeLongSidePx(
+function getMaximumSafeDiagonalPx(
   viewportWidth: number,
   viewportHeight: number,
   cellWidthPercent: number,
   cellHeightPercent: number,
-  rotation: number,
   driftX: number,
   driftY: number,
 ) {
-  const rotationRadians = (Math.abs(rotation) * Math.PI) / 180;
-  const rotationExpansion =
-    Math.cos(rotationRadians) + Math.sin(rotationRadians);
   const horizontalDriftPx = viewportWidth * (Math.abs(driftX) / 100);
   const verticalDriftPx = viewportHeight * (Math.abs(driftY) / 100);
   const cellWidthPx = viewportWidth * (cellWidthPercent / 100);
@@ -156,7 +156,7 @@ function getMaximumSafeLongSidePx(
         availableCellHeight,
         availableViewportWidth,
         availableViewportHeight,
-      ) / rotationExpansion,
+      ),
     ),
   );
 }
@@ -233,37 +233,35 @@ function createFloatingItems(
       const row = Math.floor(placementIndex / columns);
       const anchorX = ((column + 0.5) / columns) * 100;
       const anchorY = ((row + 0.5) / rows) * 100;
-      const requestedLongSidePx = randomInteger(
-        settings.minimumImageLongSidePx,
-        settings.maximumImageLongSidePx,
+      const requestedDiagonalPx = randomInteger(
+        settings.minimumImageDiagonalPx,
+        settings.maximumImageDiagonalPx,
       );
       const driftX = randomSignedNumber(minimumDriftX, maximumDriftX);
       const driftY = randomSignedNumber(minimumDriftY, maximumDriftY);
       const rotation = randomSignedInteger(1, 4);
-      const maximumSafeLongSidePx = getMaximumSafeLongSidePx(
+      const maximumSafeDiagonalPx = getMaximumSafeDiagonalPx(
         viewportWidth,
         viewportHeight,
         cellWidthPercent,
         cellHeightPercent,
-        rotation,
         driftX,
         driftY,
       );
-      const maximumRenderedLongSidePx = Math.min(
-        settings.maximumImageLongSidePx,
-        maximumSafeLongSidePx,
+      const maximumRenderedDiagonalPx = Math.min(
+        settings.maximumImageDiagonalPx,
+        maximumSafeDiagonalPx,
       );
-      const longSidePx = Math.min(
-        requestedLongSidePx,
-        maximumRenderedLongSidePx,
+      const diagonalPx = Math.min(
+        requestedDiagonalPx,
+        maximumRenderedDiagonalPx,
       );
       const safeEdgeMargins = getSafeEdgeMargins(
         viewportWidth,
         viewportHeight,
-        rotation,
         driftX,
         driftY,
-        maximumRenderedLongSidePx,
+        maximumRenderedDiagonalPx,
       );
       const maximumJitterX = Math.max(
         0,
@@ -287,8 +285,9 @@ function createFloatingItems(
           safeEdgeMargins.y,
           100 - safeEdgeMargins.y,
         ),
-        longSidePx,
-        maximumSafeLongSidePx: maximumRenderedLongSidePx,
+        diagonalPx,
+        maximumSafeDiagonalPx: maximumRenderedDiagonalPx,
+        diagonalScale: 1,
         driftX,
         driftY,
         floatDurationMs,
@@ -351,8 +350,8 @@ export function Slideshow() {
     maximumDisplayCount: DEFAULT_MAX_DISPLAY_COUNT,
     minimumSwitchSeconds: DEFAULT_MIN_SWITCH_SECONDS,
     maximumSwitchSeconds: DEFAULT_MAX_SWITCH_SECONDS,
-    minimumImageLongSidePx: DEFAULT_MIN_IMAGE_LONG_SIDE_PX,
-    maximumImageLongSidePx: DEFAULT_MAX_IMAGE_LONG_SIDE_PX,
+    minimumImageDiagonalPx: DEFAULT_MIN_IMAGE_DIAGONAL_PX,
+    maximumImageDiagonalPx: DEFAULT_MAX_IMAGE_DIAGONAL_PX,
   });
   const [draftSettings, setDraftSettings] =
     useState<DraftSlideshowSettings>({
@@ -360,8 +359,8 @@ export function Slideshow() {
       maximumDisplayCount: String(DEFAULT_MAX_DISPLAY_COUNT),
       minimumSwitchSeconds: String(DEFAULT_MIN_SWITCH_SECONDS),
       maximumSwitchSeconds: String(DEFAULT_MAX_SWITCH_SECONDS),
-      minimumImageLongSidePx: String(DEFAULT_MIN_IMAGE_LONG_SIDE_PX),
-      maximumImageLongSidePx: String(DEFAULT_MAX_IMAGE_LONG_SIDE_PX),
+      minimumImageDiagonalPx: String(DEFAULT_MIN_IMAGE_DIAGONAL_PX),
+      maximumImageDiagonalPx: String(DEFAULT_MAX_IMAGE_DIAGONAL_PX),
     });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [areControlsVisible, setAreControlsVisible] = useState(false);
@@ -419,39 +418,43 @@ export function Slideshow() {
           MIN_CONFIGURABLE_SWITCH_SECONDS,
           initialMaximumSwitchSeconds,
         );
-    const savedMinimumImageLongSidePx = Number.parseInt(
-      window.localStorage.getItem(MIN_IMAGE_LONG_SIDE_STORAGE_KEY) ?? "",
+    const savedMinimumImageDiagonalPx = Number.parseInt(
+      window.localStorage.getItem(MIN_IMAGE_DIAGONAL_STORAGE_KEY) ??
+        window.localStorage.getItem(LEGACY_MIN_IMAGE_LONG_SIDE_STORAGE_KEY) ??
+        "",
       10,
     );
-    const savedMaximumImageLongSidePx = Number.parseInt(
-      window.localStorage.getItem(MAX_IMAGE_LONG_SIDE_STORAGE_KEY) ?? "",
+    const savedMaximumImageDiagonalPx = Number.parseInt(
+      window.localStorage.getItem(MAX_IMAGE_DIAGONAL_STORAGE_KEY) ??
+        window.localStorage.getItem(LEGACY_MAX_IMAGE_LONG_SIDE_STORAGE_KEY) ??
+        "",
       10,
     );
-    const initialMaximumImageLongSidePx = Number.isNaN(
-      savedMaximumImageLongSidePx,
+    const initialMaximumImageDiagonalPx = Number.isNaN(
+      savedMaximumImageDiagonalPx,
     )
-      ? DEFAULT_MAX_IMAGE_LONG_SIDE_PX
+      ? DEFAULT_MAX_IMAGE_DIAGONAL_PX
       : clamp(
-          savedMaximumImageLongSidePx,
-          MIN_CONFIGURABLE_IMAGE_LONG_SIDE_PX,
-          MAX_CONFIGURABLE_IMAGE_LONG_SIDE_PX,
+          savedMaximumImageDiagonalPx,
+          MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX,
+          MAX_CONFIGURABLE_IMAGE_DIAGONAL_PX,
         );
-    const initialMinimumImageLongSidePx = Number.isNaN(
-      savedMinimumImageLongSidePx,
+    const initialMinimumImageDiagonalPx = Number.isNaN(
+      savedMinimumImageDiagonalPx,
     )
-      ? DEFAULT_MIN_IMAGE_LONG_SIDE_PX
+      ? DEFAULT_MIN_IMAGE_DIAGONAL_PX
       : clamp(
-          savedMinimumImageLongSidePx,
-          MIN_CONFIGURABLE_IMAGE_LONG_SIDE_PX,
-          initialMaximumImageLongSidePx,
+          savedMinimumImageDiagonalPx,
+          MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX,
+          initialMaximumImageDiagonalPx,
         );
     const initialSettings = {
       minimumDisplayCount: initialMinimumDisplayCount,
       maximumDisplayCount: initialMaximumDisplayCount,
       minimumSwitchSeconds: initialMinimumSwitchSeconds,
       maximumSwitchSeconds: initialMaximumSwitchSeconds,
-      minimumImageLongSidePx: initialMinimumImageLongSidePx,
-      maximumImageLongSidePx: initialMaximumImageLongSidePx,
+      minimumImageDiagonalPx: initialMinimumImageDiagonalPx,
+      maximumImageDiagonalPx: initialMaximumImageDiagonalPx,
     } satisfies SlideshowSettings;
 
     void fetchImages(controller.signal).then((loadedImages) => {
@@ -465,8 +468,8 @@ export function Slideshow() {
         maximumDisplayCount: String(initialSettings.maximumDisplayCount),
         minimumSwitchSeconds: String(initialSettings.minimumSwitchSeconds),
         maximumSwitchSeconds: String(initialSettings.maximumSwitchSeconds),
-        minimumImageLongSidePx: String(initialSettings.minimumImageLongSidePx),
-        maximumImageLongSidePx: String(initialSettings.maximumImageLongSidePx),
+        minimumImageDiagonalPx: String(initialSettings.minimumImageDiagonalPx),
+        maximumImageDiagonalPx: String(initialSettings.maximumImageDiagonalPx),
       });
 
       if (loadedImages) {
@@ -510,13 +513,14 @@ export function Slideshow() {
                 images.length,
                 currentItems.map((item) => item.imageIndex),
               ),
-              longSidePx: Math.min(
+              diagonalPx: Math.min(
                 randomInteger(
-                  settings.minimumImageLongSidePx,
-                  settings.maximumImageLongSidePx,
+                  settings.minimumImageDiagonalPx,
+                  settings.maximumImageDiagonalPx,
                 ),
-                currentItem.maximumSafeLongSidePx,
+                currentItem.maximumSafeDiagonalPx,
               ),
+              diagonalScale: 1,
             };
             return nextItems;
           });
@@ -537,9 +541,9 @@ export function Slideshow() {
   }, [
     images.length,
     floatingItems.length,
-    settings.maximumImageLongSidePx,
+    settings.maximumImageDiagonalPx,
     settings.maximumSwitchSeconds,
-    settings.minimumImageLongSidePx,
+    settings.minimumImageDiagonalPx,
     settings.minimumSwitchSeconds,
   ]);
 
@@ -642,39 +646,39 @@ export function Slideshow() {
           MIN_CONFIGURABLE_SWITCH_SECONDS,
           nextMaximumSwitchSeconds,
         );
-    const enteredMinimumImageLongSidePx = Number.parseInt(
-      draftSettings.minimumImageLongSidePx,
+    const enteredMinimumImageDiagonalPx = Number.parseInt(
+      draftSettings.minimumImageDiagonalPx,
       10,
     );
-    const enteredMaximumImageLongSidePx = Number.parseInt(
-      draftSettings.maximumImageLongSidePx,
+    const enteredMaximumImageDiagonalPx = Number.parseInt(
+      draftSettings.maximumImageDiagonalPx,
       10,
     );
-    const nextMaximumImageLongSidePx = Number.isNaN(
-      enteredMaximumImageLongSidePx,
+    const nextMaximumImageDiagonalPx = Number.isNaN(
+      enteredMaximumImageDiagonalPx,
     )
-      ? settings.maximumImageLongSidePx
+      ? settings.maximumImageDiagonalPx
       : clamp(
-          enteredMaximumImageLongSidePx,
-          MIN_CONFIGURABLE_IMAGE_LONG_SIDE_PX,
-          MAX_CONFIGURABLE_IMAGE_LONG_SIDE_PX,
+          enteredMaximumImageDiagonalPx,
+          MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX,
+          MAX_CONFIGURABLE_IMAGE_DIAGONAL_PX,
         );
-    const nextMinimumImageLongSidePx = Number.isNaN(
-      enteredMinimumImageLongSidePx,
+    const nextMinimumImageDiagonalPx = Number.isNaN(
+      enteredMinimumImageDiagonalPx,
     )
-      ? settings.minimumImageLongSidePx
+      ? settings.minimumImageDiagonalPx
       : clamp(
-          enteredMinimumImageLongSidePx,
-          MIN_CONFIGURABLE_IMAGE_LONG_SIDE_PX,
-          nextMaximumImageLongSidePx,
+          enteredMinimumImageDiagonalPx,
+          MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX,
+          nextMaximumImageDiagonalPx,
         );
     const nextSettings = {
       minimumDisplayCount: nextMinimumDisplayCount,
       maximumDisplayCount: nextMaximumDisplayCount,
       minimumSwitchSeconds: nextMinimumSwitchSeconds,
       maximumSwitchSeconds: nextMaximumSwitchSeconds,
-      minimumImageLongSidePx: nextMinimumImageLongSidePx,
-      maximumImageLongSidePx: nextMaximumImageLongSidePx,
+      minimumImageDiagonalPx: nextMinimumImageDiagonalPx,
+      maximumImageDiagonalPx: nextMaximumImageDiagonalPx,
     } satisfies SlideshowSettings;
 
     window.localStorage.setItem(
@@ -694,12 +698,12 @@ export function Slideshow() {
       String(nextSettings.maximumSwitchSeconds),
     );
     window.localStorage.setItem(
-      MIN_IMAGE_LONG_SIDE_STORAGE_KEY,
-      String(nextSettings.minimumImageLongSidePx),
+      MIN_IMAGE_DIAGONAL_STORAGE_KEY,
+      String(nextSettings.minimumImageDiagonalPx),
     );
     window.localStorage.setItem(
-      MAX_IMAGE_LONG_SIDE_STORAGE_KEY,
-      String(nextSettings.maximumImageLongSidePx),
+      MAX_IMAGE_DIAGONAL_STORAGE_KEY,
+      String(nextSettings.maximumImageDiagonalPx),
     );
     setSettings(nextSettings);
     setDraftSettings({
@@ -707,8 +711,8 @@ export function Slideshow() {
       maximumDisplayCount: String(nextSettings.maximumDisplayCount),
       minimumSwitchSeconds: String(nextSettings.minimumSwitchSeconds),
       maximumSwitchSeconds: String(nextSettings.maximumSwitchSeconds),
-      minimumImageLongSidePx: String(nextSettings.minimumImageLongSidePx),
-      maximumImageLongSidePx: String(nextSettings.maximumImageLongSidePx),
+      minimumImageDiagonalPx: String(nextSettings.minimumImageDiagonalPx),
+      maximumImageDiagonalPx: String(nextSettings.maximumImageDiagonalPx),
     });
     setFloatingItems(
       createFloatingItems(
@@ -719,6 +723,30 @@ export function Slideshow() {
       ),
     );
     setIsSettingsOpen(false);
+  }
+
+  function handleImageLoad(
+    itemId: string,
+    event: SyntheticEvent<HTMLImageElement>,
+  ) {
+    const { naturalWidth, naturalHeight } = event.currentTarget;
+
+    if (naturalWidth === 0 || naturalHeight === 0) {
+      return;
+    }
+
+    const diagonalScale =
+      Math.max(naturalWidth, naturalHeight) /
+      Math.hypot(naturalWidth, naturalHeight);
+
+    setFloatingItems((currentItems) =>
+      currentItems.map((item) =>
+        item.id === itemId &&
+        Math.abs(item.diagonalScale - diagonalScale) > 0.0001
+          ? { ...item, diagonalScale }
+          : item,
+      ),
+    );
   }
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -779,7 +807,11 @@ export function Slideshow() {
         );
 
         if (uploadedIndex >= 0 && nextItems[0]) {
-          nextItems[0] = { ...nextItems[0], imageIndex: uploadedIndex };
+          nextItems[0] = {
+            ...nextItems[0],
+            imageIndex: uploadedIndex,
+            diagonalScale: 1,
+          };
         }
 
         setFloatingItems(nextItems);
@@ -805,7 +837,8 @@ export function Slideshow() {
               left: `${item.x}%`,
               top: `${item.y}%`,
               zIndex: item.layer,
-              "--image-size": `${item.longSidePx}px`,
+              "--image-size": `${item.diagonalPx}px`,
+              "--image-diagonal-scale": item.diagonalScale,
               "--drift-x-start": `${-item.driftX}vw`,
               "--drift-y-start": `${-item.driftY}svh`,
               "--drift-x": `${item.driftX}vw`,
@@ -830,6 +863,7 @@ export function Slideshow() {
                     className="slideshow-image"
                     src={image.url}
                     alt=""
+                    onLoad={(event) => handleImageLoad(item.id, event)}
                   />
                 </div>
               </div>
@@ -893,8 +927,8 @@ export function Slideshow() {
       >
         表示 {settings.minimumDisplayCount}〜{settings.maximumDisplayCount}枚
         ・切替 {settings.minimumSwitchSeconds}〜
-        {settings.maximumSwitchSeconds}秒・サイズ
-        {settings.minimumImageLongSidePx}〜{settings.maximumImageLongSidePx}px
+        {settings.maximumSwitchSeconds}秒・対角線
+        {settings.minimumImageDiagonalPx}〜{settings.maximumImageDiagonalPx}px
       </button>
 
       {isSettingsOpen && (
@@ -996,7 +1030,7 @@ export function Slideshow() {
           </fieldset>
 
           <fieldset className="settings-group">
-            <legend>画像の長辺（px）</legend>
+            <legend>画像の対角線（px）</legend>
             <div className="settings-range">
               <label className="settings-label" htmlFor="minimum-image-size">
                 最小
@@ -1004,15 +1038,15 @@ export function Slideshow() {
                   id="minimum-image-size"
                   className="settings-input"
                   type="number"
-                  min={MIN_CONFIGURABLE_IMAGE_LONG_SIDE_PX}
-                  max={MAX_CONFIGURABLE_IMAGE_LONG_SIDE_PX}
+                  min={MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX}
+                  max={MAX_CONFIGURABLE_IMAGE_DIAGONAL_PX}
                   step="1"
                   required
-                  value={draftSettings.minimumImageLongSidePx}
+                  value={draftSettings.minimumImageDiagonalPx}
                   onChange={(event) =>
                     setDraftSettings((currentSettings) => ({
                       ...currentSettings,
-                      minimumImageLongSidePx: event.target.value,
+                      minimumImageDiagonalPx: event.target.value,
                     }))
                   }
                 />
@@ -1024,15 +1058,15 @@ export function Slideshow() {
                   id="maximum-image-size"
                   className="settings-input"
                   type="number"
-                  min={MIN_CONFIGURABLE_IMAGE_LONG_SIDE_PX}
-                  max={MAX_CONFIGURABLE_IMAGE_LONG_SIDE_PX}
+                  min={MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX}
+                  max={MAX_CONFIGURABLE_IMAGE_DIAGONAL_PX}
                   step="1"
                   required
-                  value={draftSettings.maximumImageLongSidePx}
+                  value={draftSettings.maximumImageDiagonalPx}
                   onChange={(event) =>
                     setDraftSettings((currentSettings) => ({
                       ...currentSettings,
-                      maximumImageLongSidePx: event.target.value,
+                      maximumImageDiagonalPx: event.target.value,
                     }))
                   }
                 />
@@ -1041,8 +1075,8 @@ export function Slideshow() {
           </fieldset>
 
           <p className="settings-description">
-            サイズは縦横比を保った長辺の値です。画面に収まらない場合だけ
-            自動的に縮小します。
+            サイズは画像の左下から右上までの距離です。画面に収まらない
+            場合だけ自動的に縮小します。
           </p>
           <button className="settings-submit" type="submit">
             反映する
