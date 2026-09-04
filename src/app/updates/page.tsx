@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.011</h1>
+        <h1 className="updates-title">v0.012</h1>
+
+        <section className="updates-entry">
+          <h2>v0.012</h2>
+          <ul>
+            <li>画像の長辺をピクセル単位で最小〜最大設定できる機能を追加</li>
+            <li>縦長・横長の画像ともに縦横比を維持</li>
+            <li>画面や表示枚数に対して大きすぎる場合の自動縮小に対応</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.011</h2>
