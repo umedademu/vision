@@ -51,6 +51,8 @@ type SlideshowSettings = {
   maximumDisplayCount: number;
   minimumSwitchSeconds: number;
   maximumSwitchSeconds: number;
+  minimumDissolveSeconds: number;
+  maximumDissolveSeconds: number;
   minimumImageDiagonalPx: number;
   maximumImageDiagonalPx: number;
 };
@@ -60,6 +62,8 @@ type DraftSlideshowSettings = {
   maximumDisplayCount: string;
   minimumSwitchSeconds: string;
   maximumSwitchSeconds: string;
+  minimumDissolveSeconds: string;
+  maximumDissolveSeconds: string;
   minimumImageDiagonalPx: string;
   maximumImageDiagonalPx: string;
 };
@@ -68,18 +72,24 @@ const DEFAULT_MIN_DISPLAY_COUNT = 8;
 const DEFAULT_MAX_DISPLAY_COUNT = 12;
 const DEFAULT_MIN_SWITCH_SECONDS = 5;
 const DEFAULT_MAX_SWITCH_SECONDS = 10;
+const DEFAULT_MIN_DISSOLVE_SECONDS = 1;
+const DEFAULT_MAX_DISSOLVE_SECONDS = 1.5;
 const DEFAULT_MIN_IMAGE_DIAGONAL_PX = 160;
 const DEFAULT_MAX_IMAGE_DIAGONAL_PX = 280;
 const MIN_CONFIGURABLE_DISPLAY_COUNT = 1;
 const MAX_CONFIGURABLE_DISPLAY_COUNT = 100;
 const MIN_CONFIGURABLE_SWITCH_SECONDS = 1;
 const MAX_CONFIGURABLE_SWITCH_SECONDS = 3_600;
+const MIN_CONFIGURABLE_DISSOLVE_SECONDS = 0.1;
+const MAX_CONFIGURABLE_DISSOLVE_SECONDS = 10;
 const MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX = 16;
 const MAX_CONFIGURABLE_IMAGE_DIAGONAL_PX = 4_000;
 const MIN_DISPLAY_COUNT_STORAGE_KEY = "vision-minimum-display-count";
 const MAX_DISPLAY_COUNT_STORAGE_KEY = "vision-maximum-display-count";
 const MIN_SWITCH_SECONDS_STORAGE_KEY = "vision-minimum-switch-seconds";
 const MAX_SWITCH_SECONDS_STORAGE_KEY = "vision-maximum-switch-seconds";
+const MIN_DISSOLVE_SECONDS_STORAGE_KEY = "vision-minimum-dissolve-seconds";
+const MAX_DISSOLVE_SECONDS_STORAGE_KEY = "vision-maximum-dissolve-seconds";
 const MIN_IMAGE_DIAGONAL_STORAGE_KEY = "vision-minimum-image-diagonal-px";
 const MAX_IMAGE_DIAGONAL_STORAGE_KEY = "vision-maximum-image-diagonal-px";
 const LEGACY_MIN_IMAGE_LONG_SIDE_STORAGE_KEY =
@@ -88,11 +98,16 @@ const LEGACY_MAX_IMAGE_LONG_SIDE_STORAGE_KEY =
   "vision-maximum-image-long-side-px";
 const EDGE_GAP_PX = 8;
 const CONTROLS_VISIBLE_MS = 8_000;
-const MIN_DISSOLVE_DURATION_MS = 1_000;
-const MAX_DISSOLVE_DURATION_MS = 1_500;
 
 function randomInteger(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function getRandomDissolveDurationMs(settings: SlideshowSettings) {
+  return randomInteger(
+    Math.round(settings.minimumDissolveSeconds * 1_000),
+    Math.round(settings.maximumDissolveSeconds * 1_000),
+  );
 }
 
 function randomSignedInteger(min: number, max: number) {
@@ -296,10 +311,7 @@ function createFloatingItems(
         diagonalPx,
         maximumSafeDiagonalPx: maximumRenderedDiagonalPx,
         diagonalScale: 1,
-        dissolveDurationMs: randomInteger(
-          MIN_DISSOLVE_DURATION_MS,
-          MAX_DISSOLVE_DURATION_MS,
-        ),
+        dissolveDurationMs: getRandomDissolveDurationMs(settings),
         transitionId: 0,
         isLeaving: false,
         driftX,
@@ -443,10 +455,7 @@ function createAddedFloatingItem(
     diagonalPx,
     maximumSafeDiagonalPx: maximumRenderedDiagonalPx,
     diagonalScale: 1,
-    dissolveDurationMs: randomInteger(
-      MIN_DISSOLVE_DURATION_MS,
-      MAX_DISSOLVE_DURATION_MS,
-    ),
+    dissolveDurationMs: getRandomDissolveDurationMs(settings),
     transitionId: 0,
     isLeaving: false,
     driftX,
@@ -502,10 +511,7 @@ function changeFloatingItem(
           ),
           previousDiagonalScale: item.diagonalScale,
           diagonalScale: 1,
-          dissolveDurationMs: randomInteger(
-            MIN_DISSOLVE_DURATION_MS,
-            MAX_DISSOLVE_DURATION_MS,
-          ),
+          dissolveDurationMs: getRandomDissolveDurationMs(settings),
           transitionId: item.transitionId + 1,
         }
       : item,
@@ -525,10 +531,7 @@ function changeFloatingItem(
         ? {
             ...item,
             isLeaving: true,
-            dissolveDurationMs: randomInteger(
-              MIN_DISSOLVE_DURATION_MS,
-              MAX_DISSOLVE_DURATION_MS,
-            ),
+            dissolveDurationMs: getRandomDissolveDurationMs(settings),
           }
         : item,
     );
@@ -601,6 +604,8 @@ export function Slideshow() {
     maximumDisplayCount: DEFAULT_MAX_DISPLAY_COUNT,
     minimumSwitchSeconds: DEFAULT_MIN_SWITCH_SECONDS,
     maximumSwitchSeconds: DEFAULT_MAX_SWITCH_SECONDS,
+    minimumDissolveSeconds: DEFAULT_MIN_DISSOLVE_SECONDS,
+    maximumDissolveSeconds: DEFAULT_MAX_DISSOLVE_SECONDS,
     minimumImageDiagonalPx: DEFAULT_MIN_IMAGE_DIAGONAL_PX,
     maximumImageDiagonalPx: DEFAULT_MAX_IMAGE_DIAGONAL_PX,
   });
@@ -610,6 +615,8 @@ export function Slideshow() {
       maximumDisplayCount: String(DEFAULT_MAX_DISPLAY_COUNT),
       minimumSwitchSeconds: String(DEFAULT_MIN_SWITCH_SECONDS),
       maximumSwitchSeconds: String(DEFAULT_MAX_SWITCH_SECONDS),
+      minimumDissolveSeconds: String(DEFAULT_MIN_DISSOLVE_SECONDS),
+      maximumDissolveSeconds: String(DEFAULT_MAX_DISSOLVE_SECONDS),
       minimumImageDiagonalPx: String(DEFAULT_MIN_IMAGE_DIAGONAL_PX),
       maximumImageDiagonalPx: String(DEFAULT_MAX_IMAGE_DIAGONAL_PX),
     });
@@ -674,6 +681,30 @@ export function Slideshow() {
           MIN_CONFIGURABLE_SWITCH_SECONDS,
           initialMaximumSwitchSeconds,
         );
+    const savedMinimumDissolveSeconds = Number.parseFloat(
+      window.localStorage.getItem(MIN_DISSOLVE_SECONDS_STORAGE_KEY) ?? "",
+    );
+    const savedMaximumDissolveSeconds = Number.parseFloat(
+      window.localStorage.getItem(MAX_DISSOLVE_SECONDS_STORAGE_KEY) ?? "",
+    );
+    const initialMaximumDissolveSeconds = Number.isNaN(
+      savedMaximumDissolveSeconds,
+    )
+      ? DEFAULT_MAX_DISSOLVE_SECONDS
+      : clamp(
+          savedMaximumDissolveSeconds,
+          MIN_CONFIGURABLE_DISSOLVE_SECONDS,
+          MAX_CONFIGURABLE_DISSOLVE_SECONDS,
+        );
+    const initialMinimumDissolveSeconds = Number.isNaN(
+      savedMinimumDissolveSeconds,
+    )
+      ? DEFAULT_MIN_DISSOLVE_SECONDS
+      : clamp(
+          savedMinimumDissolveSeconds,
+          MIN_CONFIGURABLE_DISSOLVE_SECONDS,
+          initialMaximumDissolveSeconds,
+        );
     const savedMinimumImageDiagonalPx = Number.parseInt(
       window.localStorage.getItem(MIN_IMAGE_DIAGONAL_STORAGE_KEY) ??
         window.localStorage.getItem(LEGACY_MIN_IMAGE_LONG_SIDE_STORAGE_KEY) ??
@@ -709,6 +740,8 @@ export function Slideshow() {
       maximumDisplayCount: initialMaximumDisplayCount,
       minimumSwitchSeconds: initialMinimumSwitchSeconds,
       maximumSwitchSeconds: initialMaximumSwitchSeconds,
+      minimumDissolveSeconds: initialMinimumDissolveSeconds,
+      maximumDissolveSeconds: initialMaximumDissolveSeconds,
       minimumImageDiagonalPx: initialMinimumImageDiagonalPx,
       maximumImageDiagonalPx: initialMaximumImageDiagonalPx,
     } satisfies SlideshowSettings;
@@ -724,6 +757,12 @@ export function Slideshow() {
         maximumDisplayCount: String(initialSettings.maximumDisplayCount),
         minimumSwitchSeconds: String(initialSettings.minimumSwitchSeconds),
         maximumSwitchSeconds: String(initialSettings.maximumSwitchSeconds),
+        minimumDissolveSeconds: String(
+          initialSettings.minimumDissolveSeconds,
+        ),
+        maximumDissolveSeconds: String(
+          initialSettings.maximumDissolveSeconds,
+        ),
         minimumImageDiagonalPx: String(initialSettings.minimumImageDiagonalPx),
         maximumImageDiagonalPx: String(initialSettings.maximumImageDiagonalPx),
       });
@@ -988,6 +1027,30 @@ export function Slideshow() {
           MIN_CONFIGURABLE_SWITCH_SECONDS,
           nextMaximumSwitchSeconds,
         );
+    const enteredMinimumDissolveSeconds = Number.parseFloat(
+      draftSettings.minimumDissolveSeconds,
+    );
+    const enteredMaximumDissolveSeconds = Number.parseFloat(
+      draftSettings.maximumDissolveSeconds,
+    );
+    const nextMaximumDissolveSeconds = Number.isNaN(
+      enteredMaximumDissolveSeconds,
+    )
+      ? settings.maximumDissolveSeconds
+      : clamp(
+          enteredMaximumDissolveSeconds,
+          MIN_CONFIGURABLE_DISSOLVE_SECONDS,
+          MAX_CONFIGURABLE_DISSOLVE_SECONDS,
+        );
+    const nextMinimumDissolveSeconds = Number.isNaN(
+      enteredMinimumDissolveSeconds,
+    )
+      ? settings.minimumDissolveSeconds
+      : clamp(
+          enteredMinimumDissolveSeconds,
+          MIN_CONFIGURABLE_DISSOLVE_SECONDS,
+          nextMaximumDissolveSeconds,
+        );
     const enteredMinimumImageDiagonalPx = Number.parseInt(
       draftSettings.minimumImageDiagonalPx,
       10,
@@ -1019,6 +1082,8 @@ export function Slideshow() {
       maximumDisplayCount: nextMaximumDisplayCount,
       minimumSwitchSeconds: nextMinimumSwitchSeconds,
       maximumSwitchSeconds: nextMaximumSwitchSeconds,
+      minimumDissolveSeconds: nextMinimumDissolveSeconds,
+      maximumDissolveSeconds: nextMaximumDissolveSeconds,
       minimumImageDiagonalPx: nextMinimumImageDiagonalPx,
       maximumImageDiagonalPx: nextMaximumImageDiagonalPx,
     } satisfies SlideshowSettings;
@@ -1040,6 +1105,14 @@ export function Slideshow() {
       String(nextSettings.maximumSwitchSeconds),
     );
     window.localStorage.setItem(
+      MIN_DISSOLVE_SECONDS_STORAGE_KEY,
+      String(nextSettings.minimumDissolveSeconds),
+    );
+    window.localStorage.setItem(
+      MAX_DISSOLVE_SECONDS_STORAGE_KEY,
+      String(nextSettings.maximumDissolveSeconds),
+    );
+    window.localStorage.setItem(
       MIN_IMAGE_DIAGONAL_STORAGE_KEY,
       String(nextSettings.minimumImageDiagonalPx),
     );
@@ -1053,6 +1126,8 @@ export function Slideshow() {
       maximumDisplayCount: String(nextSettings.maximumDisplayCount),
       minimumSwitchSeconds: String(nextSettings.minimumSwitchSeconds),
       maximumSwitchSeconds: String(nextSettings.maximumSwitchSeconds),
+      minimumDissolveSeconds: String(nextSettings.minimumDissolveSeconds),
+      maximumDissolveSeconds: String(nextSettings.maximumDissolveSeconds),
       minimumImageDiagonalPx: String(nextSettings.minimumImageDiagonalPx),
       maximumImageDiagonalPx: String(nextSettings.maximumImageDiagonalPx),
     });
@@ -1289,8 +1364,10 @@ export function Slideshow() {
         onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
       >
         表示 {settings.minimumDisplayCount}〜{settings.maximumDisplayCount}枚
-        ・切替 {settings.minimumSwitchSeconds}〜
-        {settings.maximumSwitchSeconds}秒・対角線
+        ・間隔 {settings.minimumSwitchSeconds}〜
+        {settings.maximumSwitchSeconds}秒・切替時間{" "}
+        {settings.minimumDissolveSeconds}〜
+        {settings.maximumDissolveSeconds}秒・対角線
         {settings.minimumImageDiagonalPx}〜{settings.maximumImageDiagonalPx}px
       </button>
 
@@ -1348,7 +1425,7 @@ export function Slideshow() {
           </fieldset>
 
           <fieldset className="settings-group">
-            <legend>切替秒数</legend>
+            <legend>画像を入れ替える間隔（秒）</legend>
             <div className="settings-range">
               <label className="settings-label" htmlFor="minimum-switch-seconds">
                 最小
@@ -1385,6 +1462,57 @@ export function Slideshow() {
                     setDraftSettings((currentSettings) => ({
                       ...currentSettings,
                       maximumSwitchSeconds: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset className="settings-group">
+            <legend>切替にかける時間（秒）</legend>
+            <div className="settings-range">
+              <label
+                className="settings-label"
+                htmlFor="minimum-dissolve-seconds"
+              >
+                最小
+                <input
+                  id="minimum-dissolve-seconds"
+                  className="settings-input"
+                  type="number"
+                  min={MIN_CONFIGURABLE_DISSOLVE_SECONDS}
+                  max={MAX_CONFIGURABLE_DISSOLVE_SECONDS}
+                  step="0.1"
+                  required
+                  value={draftSettings.minimumDissolveSeconds}
+                  onChange={(event) =>
+                    setDraftSettings((currentSettings) => ({
+                      ...currentSettings,
+                      minimumDissolveSeconds: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <span className="settings-separator">〜</span>
+              <label
+                className="settings-label"
+                htmlFor="maximum-dissolve-seconds"
+              >
+                最大
+                <input
+                  id="maximum-dissolve-seconds"
+                  className="settings-input"
+                  type="number"
+                  min={MIN_CONFIGURABLE_DISSOLVE_SECONDS}
+                  max={MAX_CONFIGURABLE_DISSOLVE_SECONDS}
+                  step="0.1"
+                  required
+                  value={draftSettings.maximumDissolveSeconds}
+                  onChange={(event) =>
+                    setDraftSettings((currentSettings) => ({
+                      ...currentSettings,
+                      maximumDissolveSeconds: event.target.value,
                     }))
                   }
                 />
@@ -1438,6 +1566,9 @@ export function Slideshow() {
           </fieldset>
 
           <p className="settings-description">
+            「間隔」は画像の入れ替えが始まるまでの時間、「切替」は徐々に
+            消えたり現れたりする時間です。
+            <br />
             サイズは画像の左下から右上までの距離です。画面に収まらない
             場合だけ自動的に縮小します。
           </p>

@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.020</h1>
+        <h1 className="updates-title">v0.021</h1>
+
+        <section className="updates-entry">
+          <h2>v0.021</h2>
+          <ul>
+            <li>交差表示にかける時間の最小値と最大値を設定可能に変更</li>
+            <li>0.1〜10秒の範囲で小数入力に対応</li>
+            <li>画像を入れ替える間隔と切替時間の表示を分かりやすく整理</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.020</h2>
