@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.026</h1>
+        <h1 className="updates-title">v0.027</h1>
+
+        <section className="updates-entry">
+          <h2>v0.027</h2>
+          <ul>
+            <li>画像全体が別の位置へ滑っていく動きを削除</li>
+            <li>画像の実寸判定による位置補正を即座に反映</li>
+            <li>その場でゆっくり漂う動きは維持</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.026</h2>
