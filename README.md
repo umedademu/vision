@@ -2,6 +2,8 @@
 
 Cloudflare R2に保存した画像を、スクリーンセーバーのように5秒ごとにランダム表示するWebアプリ。
 
+現在のバージョン: `v0.001`
+
 Vercelへのデプロイを前提とした、Next.js App Router + TypeScript構成のプロジェクトです。
 
 ## 開発
@@ -29,6 +31,9 @@ src/
     layout.tsx                    共通レイアウト
     page.tsx                      トップページ
     slideshow.tsx                 5秒ごとのランダム表示
+    updates/page.tsx              更新情報ページ
 ```
 
 R2バケットが未設定または空の場合は、画面中央に `vision` と表示します。
+
+更新情報は `/updates` で確認できます。

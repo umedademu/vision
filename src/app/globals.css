@@ -20,7 +20,7 @@ body {
   background: #000;
 }
 
-main {
+.slideshow {
   display: grid;
   width: 100%;
   min-height: 100svh;
@@ -29,7 +29,7 @@ main {
   color: #fff;
 }
 
-h1 {
+.slideshow-title {
   margin: 0;
   font-size: clamp(3rem, 12vw, 9rem);
   font-weight: 400;
@@ -58,4 +58,52 @@ h1 {
   .slideshow-image {
     animation: none;
   }
+}
+
+.updates-page {
+  min-height: 100svh;
+  padding: clamp(2rem, 6vw, 5rem);
+  background: #f5f5f3;
+  color: #171717;
+}
+
+.updates-content {
+  width: min(100%, 48rem);
+  margin: 0 auto;
+}
+
+.updates-label {
+  margin: 0 0 0.75rem;
+  color: #666;
+  font-size: 0.875rem;
+}
+
+.updates-title {
+  margin: 0;
+  font-size: clamp(2.5rem, 8vw, 5rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+
+.updates-entry {
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px solid #ccc;
+}
+
+.updates-entry h2 {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+}
+
+.updates-entry ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  line-height: 1.8;
+}
+
+.updates-back {
+  display: inline-block;
+  margin-top: 3rem;
+  color: inherit;
 }

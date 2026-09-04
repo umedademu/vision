@@ -69,7 +69,7 @@ export function Slideshow() {
   const currentImage = images[currentIndex];
 
   return (
-    <main>
+    <main className="slideshow">
       {currentImage ? (
         // R2の署名付きURLをブラウザから直接読み込みます。
         // eslint-disable-next-line @next/next/no-img-element
@@ -80,7 +80,7 @@ export function Slideshow() {
           alt=""
         />
       ) : (
-        <h1>vision</h1>
+        <h1 className="slideshow-title">vision</h1>
       )}
     </main>
   );
