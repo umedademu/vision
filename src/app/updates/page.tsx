@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.021</h1>
+        <h1 className="updates-title">v0.022</h1>
+
+        <section className="updates-entry">
+          <h2>v0.022</h2>
+          <ul>
+            <li>画像同士の重なり許容値を0〜100%で設定可能に変更</li>
+            <li>初回表示と途中で増える画像の配置に設定値を反映</li>
+            <li>表示設定内の説明文を削除</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.021</h2>

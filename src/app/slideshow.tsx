@@ -55,6 +55,7 @@ type SlideshowSettings = {
   maximumDissolveSeconds: number;
   minimumImageDiagonalPx: number;
   maximumImageDiagonalPx: number;
+  overlapTolerancePercent: number;
 };
 
 type DraftSlideshowSettings = {
@@ -66,6 +67,7 @@ type DraftSlideshowSettings = {
   maximumDissolveSeconds: string;
   minimumImageDiagonalPx: string;
   maximumImageDiagonalPx: string;
+  overlapTolerancePercent: string;
 };
 
 const DEFAULT_MIN_DISPLAY_COUNT = 8;
@@ -76,6 +78,7 @@ const DEFAULT_MIN_DISSOLVE_SECONDS = 1;
 const DEFAULT_MAX_DISSOLVE_SECONDS = 1.5;
 const DEFAULT_MIN_IMAGE_DIAGONAL_PX = 160;
 const DEFAULT_MAX_IMAGE_DIAGONAL_PX = 280;
+const DEFAULT_OVERLAP_TOLERANCE_PERCENT = 30;
 const MIN_CONFIGURABLE_DISPLAY_COUNT = 1;
 const MAX_CONFIGURABLE_DISPLAY_COUNT = 100;
 const MIN_CONFIGURABLE_SWITCH_SECONDS = 1;
@@ -84,6 +87,8 @@ const MIN_CONFIGURABLE_DISSOLVE_SECONDS = 0.1;
 const MAX_CONFIGURABLE_DISSOLVE_SECONDS = 10;
 const MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX = 16;
 const MAX_CONFIGURABLE_IMAGE_DIAGONAL_PX = 4_000;
+const MIN_CONFIGURABLE_OVERLAP_TOLERANCE_PERCENT = 0;
+const MAX_CONFIGURABLE_OVERLAP_TOLERANCE_PERCENT = 100;
 const MIN_DISPLAY_COUNT_STORAGE_KEY = "vision-minimum-display-count";
 const MAX_DISPLAY_COUNT_STORAGE_KEY = "vision-maximum-display-count";
 const MIN_SWITCH_SECONDS_STORAGE_KEY = "vision-minimum-switch-seconds";
@@ -92,6 +97,7 @@ const MIN_DISSOLVE_SECONDS_STORAGE_KEY = "vision-minimum-dissolve-seconds";
 const MAX_DISSOLVE_SECONDS_STORAGE_KEY = "vision-maximum-dissolve-seconds";
 const MIN_IMAGE_DIAGONAL_STORAGE_KEY = "vision-minimum-image-diagonal-px";
 const MAX_IMAGE_DIAGONAL_STORAGE_KEY = "vision-maximum-image-diagonal-px";
+const OVERLAP_TOLERANCE_STORAGE_KEY = "vision-overlap-tolerance-percent";
 const LEGACY_MIN_IMAGE_LONG_SIDE_STORAGE_KEY =
   "vision-minimum-image-long-side-px";
 const LEGACY_MAX_IMAGE_LONG_SIDE_STORAGE_KEY =
@@ -220,6 +226,81 @@ function createInitialIndexes(imageCount: number, displayCount: number) {
   return indexes;
 }
 
+function findOpenPosition(
+  currentItems: FloatingItem[],
+  viewportWidth: number,
+  viewportHeight: number,
+  driftX: number,
+  driftY: number,
+  maximumRenderedDiagonalPx: number,
+  overlapTolerancePercent: number,
+) {
+  const safeEdgeMargins = getSafeEdgeMargins(
+    viewportWidth,
+    viewportHeight,
+    driftX,
+    driftY,
+    maximumRenderedDiagonalPx,
+  );
+  const requiredRadiusRatio = 1 - overlapTolerancePercent / 100;
+  let bestPosition = {
+    x: 50,
+    y: 50,
+    clearance: Number.NEGATIVE_INFINITY,
+  };
+
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const x =
+      safeEdgeMargins.x +
+      Math.random() * Math.max(0, 100 - safeEdgeMargins.x * 2);
+    const y =
+      safeEdgeMargins.y +
+      Math.random() * Math.max(0, 100 - safeEdgeMargins.y * 2);
+    const clearance = Math.min(
+      ...currentItems.map((item) => {
+        const horizontalDistancePx =
+          (Math.abs(x - item.x) / 100) * viewportWidth;
+        const verticalDistancePx =
+          (Math.abs(y - item.y) / 100) * viewportHeight;
+        const horizontalDriftPx =
+          ((Math.abs(driftX) + Math.abs(item.driftX)) / 100) *
+          viewportWidth;
+        const verticalDriftPx =
+          ((Math.abs(driftY) + Math.abs(item.driftY)) / 100) *
+          viewportHeight;
+        const closestHorizontalDistancePx = Math.max(
+          0,
+          horizontalDistancePx - horizontalDriftPx,
+        );
+        const closestVerticalDistancePx = Math.max(
+          0,
+          verticalDistancePx - verticalDriftPx,
+        );
+        const closestCenterDistancePx = Math.hypot(
+          closestHorizontalDistancePx,
+          closestVerticalDistancePx,
+        );
+        const requiredCenterDistancePx =
+          (maximumRenderedDiagonalPx / 2 +
+            item.maximumSafeDiagonalPx / 2) *
+          requiredRadiusRatio;
+
+        return closestCenterDistancePx - requiredCenterDistancePx;
+      }),
+    );
+
+    if (clearance >= 0) {
+      return { x, y, clearance };
+    }
+
+    if (clearance > bestPosition.clearance) {
+      bestPosition = { x, y, clearance };
+    }
+  }
+
+  return bestPosition;
+}
+
 function createFloatingItems(
   imageCount: number,
   viewportWidth: number,
@@ -243,19 +324,11 @@ function createFloatingItems(
   const maximumDriftX = Math.min(2, Math.max(0.5, cellWidthPercent * 0.08));
   const minimumDriftY = Math.min(1, Math.max(0.25, cellHeightPercent * 0.04));
   const maximumDriftY = Math.min(2, Math.max(0.5, cellHeightPercent * 0.08));
-  const placementIndexes = shuffleIndexes(columns * rows).slice(
-    0,
-    displayCount,
-  );
+  const floatingItems: FloatingItem[] = [];
 
-  return createInitialIndexes(imageCount, displayCount).map(
+  createInitialIndexes(imageCount, displayCount).forEach(
     (imageIndex, slotIndex) => {
       const floatDurationMs = randomInteger(7_000, 15_000);
-      const placementIndex = placementIndexes[slotIndex];
-      const column = placementIndex % columns;
-      const row = Math.floor(placementIndex / columns);
-      const anchorX = ((column + 0.5) / columns) * 100;
-      const anchorY = ((row + 0.5) / rows) * 100;
       const requestedDiagonalPx = randomInteger(
         settings.minimumImageDiagonalPx,
         settings.maximumImageDiagonalPx,
@@ -279,35 +352,21 @@ function createFloatingItems(
         requestedDiagonalPx,
         maximumRenderedDiagonalPx,
       );
-      const safeEdgeMargins = getSafeEdgeMargins(
+      const position = findOpenPosition(
+        floatingItems,
         viewportWidth,
         viewportHeight,
         driftX,
         driftY,
         maximumRenderedDiagonalPx,
-      );
-      const maximumJitterX = Math.max(
-        0,
-        cellWidthPercent / 2 - safeEdgeMargins.x,
-      );
-      const maximumJitterY = Math.max(
-        0,
-        cellHeightPercent / 2 - safeEdgeMargins.y,
+        settings.overlapTolerancePercent,
       );
 
-      return {
+      floatingItems.push({
         id: `${Date.now()}-${slotIndex}-${Math.random()}`,
         imageIndex,
-        x: clamp(
-          anchorX + randomSignedNumber(0, maximumJitterX),
-          safeEdgeMargins.x,
-          100 - safeEdgeMargins.x,
-        ),
-        y: clamp(
-          anchorY + randomSignedNumber(0, maximumJitterY),
-          safeEdgeMargins.y,
-          100 - safeEdgeMargins.y,
-        ),
+        x: position.x,
+        y: position.y,
         diagonalPx,
         maximumSafeDiagonalPx: maximumRenderedDiagonalPx,
         diagonalScale: 1,
@@ -320,9 +379,11 @@ function createFloatingItems(
         floatDelayMs: -randomInteger(0, floatDurationMs),
         rotation,
         layer: randomInteger(1, 5),
-      } satisfies FloatingItem;
+      });
     },
   );
+
+  return floatingItems;
 }
 
 function getNextDisplayCount(
@@ -385,61 +446,15 @@ function createAddedFloatingItem(
     ),
     maximumRenderedDiagonalPx,
   );
-  const safeEdgeMargins = getSafeEdgeMargins(
+  const bestPosition = findOpenPosition(
+    currentItems,
     viewportWidth,
     viewportHeight,
     driftX,
     driftY,
     maximumRenderedDiagonalPx,
+    settings.overlapTolerancePercent,
   );
-  let bestPosition = {
-    x: 50,
-    y: 50,
-    clearance: Number.NEGATIVE_INFINITY,
-  };
-
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const x =
-      safeEdgeMargins.x +
-      Math.random() * (100 - safeEdgeMargins.x * 2);
-    const y =
-      safeEdgeMargins.y +
-      Math.random() * (100 - safeEdgeMargins.y * 2);
-    const clearance = Math.min(
-      ...currentItems.map((item) => {
-        const horizontalDistancePx =
-          (Math.abs(x - item.x) / 100) * viewportWidth;
-        const verticalDistancePx =
-          (Math.abs(y - item.y) / 100) * viewportHeight;
-        const horizontalDriftPx =
-          ((Math.abs(driftX) + Math.abs(item.driftX)) / 100) *
-          viewportWidth;
-        const verticalDriftPx =
-          ((Math.abs(driftY) + Math.abs(item.driftY)) / 100) *
-          viewportHeight;
-        const closestHorizontalDistancePx = Math.max(
-          0,
-          horizontalDistancePx - horizontalDriftPx,
-        );
-        const closestVerticalDistancePx = Math.max(
-          0,
-          verticalDistancePx - verticalDriftPx,
-        );
-        const closestCenterDistancePx = Math.hypot(
-          closestHorizontalDistancePx,
-          closestVerticalDistancePx,
-        );
-        const allowedOverlapDistancePx =
-          (maximumRenderedDiagonalPx / 2 + item.diagonalPx / 2) * 0.7;
-
-        return closestCenterDistancePx - allowedOverlapDistancePx;
-      }),
-    );
-
-    if (clearance > bestPosition.clearance) {
-      bestPosition = { x, y, clearance };
-    }
-  }
 
   const floatDurationMs = randomInteger(7_000, 15_000);
 
@@ -608,6 +623,7 @@ export function Slideshow() {
     maximumDissolveSeconds: DEFAULT_MAX_DISSOLVE_SECONDS,
     minimumImageDiagonalPx: DEFAULT_MIN_IMAGE_DIAGONAL_PX,
     maximumImageDiagonalPx: DEFAULT_MAX_IMAGE_DIAGONAL_PX,
+    overlapTolerancePercent: DEFAULT_OVERLAP_TOLERANCE_PERCENT,
   });
   const [draftSettings, setDraftSettings] =
     useState<DraftSlideshowSettings>({
@@ -619,6 +635,7 @@ export function Slideshow() {
       maximumDissolveSeconds: String(DEFAULT_MAX_DISSOLVE_SECONDS),
       minimumImageDiagonalPx: String(DEFAULT_MIN_IMAGE_DIAGONAL_PX),
       maximumImageDiagonalPx: String(DEFAULT_MAX_IMAGE_DIAGONAL_PX),
+      overlapTolerancePercent: String(DEFAULT_OVERLAP_TOLERANCE_PERCENT),
     });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [areControlsVisible, setAreControlsVisible] = useState(false);
@@ -735,6 +752,19 @@ export function Slideshow() {
           MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX,
           initialMaximumImageDiagonalPx,
         );
+    const savedOverlapTolerancePercent = Number.parseInt(
+      window.localStorage.getItem(OVERLAP_TOLERANCE_STORAGE_KEY) ?? "",
+      10,
+    );
+    const initialOverlapTolerancePercent = Number.isNaN(
+      savedOverlapTolerancePercent,
+    )
+      ? DEFAULT_OVERLAP_TOLERANCE_PERCENT
+      : clamp(
+          savedOverlapTolerancePercent,
+          MIN_CONFIGURABLE_OVERLAP_TOLERANCE_PERCENT,
+          MAX_CONFIGURABLE_OVERLAP_TOLERANCE_PERCENT,
+        );
     const initialSettings = {
       minimumDisplayCount: initialMinimumDisplayCount,
       maximumDisplayCount: initialMaximumDisplayCount,
@@ -744,6 +774,7 @@ export function Slideshow() {
       maximumDissolveSeconds: initialMaximumDissolveSeconds,
       minimumImageDiagonalPx: initialMinimumImageDiagonalPx,
       maximumImageDiagonalPx: initialMaximumImageDiagonalPx,
+      overlapTolerancePercent: initialOverlapTolerancePercent,
     } satisfies SlideshowSettings;
 
     void fetchImages(controller.signal).then((loadedImages) => {
@@ -765,6 +796,9 @@ export function Slideshow() {
         ),
         minimumImageDiagonalPx: String(initialSettings.minimumImageDiagonalPx),
         maximumImageDiagonalPx: String(initialSettings.maximumImageDiagonalPx),
+        overlapTolerancePercent: String(
+          initialSettings.overlapTolerancePercent,
+        ),
       });
 
       if (loadedImages) {
@@ -1077,6 +1111,19 @@ export function Slideshow() {
           MIN_CONFIGURABLE_IMAGE_DIAGONAL_PX,
           nextMaximumImageDiagonalPx,
         );
+    const enteredOverlapTolerancePercent = Number.parseInt(
+      draftSettings.overlapTolerancePercent,
+      10,
+    );
+    const nextOverlapTolerancePercent = Number.isNaN(
+      enteredOverlapTolerancePercent,
+    )
+      ? settings.overlapTolerancePercent
+      : clamp(
+          enteredOverlapTolerancePercent,
+          MIN_CONFIGURABLE_OVERLAP_TOLERANCE_PERCENT,
+          MAX_CONFIGURABLE_OVERLAP_TOLERANCE_PERCENT,
+        );
     const nextSettings = {
       minimumDisplayCount: nextMinimumDisplayCount,
       maximumDisplayCount: nextMaximumDisplayCount,
@@ -1086,6 +1133,7 @@ export function Slideshow() {
       maximumDissolveSeconds: nextMaximumDissolveSeconds,
       minimumImageDiagonalPx: nextMinimumImageDiagonalPx,
       maximumImageDiagonalPx: nextMaximumImageDiagonalPx,
+      overlapTolerancePercent: nextOverlapTolerancePercent,
     } satisfies SlideshowSettings;
 
     window.localStorage.setItem(
@@ -1120,6 +1168,10 @@ export function Slideshow() {
       MAX_IMAGE_DIAGONAL_STORAGE_KEY,
       String(nextSettings.maximumImageDiagonalPx),
     );
+    window.localStorage.setItem(
+      OVERLAP_TOLERANCE_STORAGE_KEY,
+      String(nextSettings.overlapTolerancePercent),
+    );
     setSettings(nextSettings);
     setDraftSettings({
       minimumDisplayCount: String(nextSettings.minimumDisplayCount),
@@ -1130,6 +1182,7 @@ export function Slideshow() {
       maximumDissolveSeconds: String(nextSettings.maximumDissolveSeconds),
       minimumImageDiagonalPx: String(nextSettings.minimumImageDiagonalPx),
       maximumImageDiagonalPx: String(nextSettings.maximumImageDiagonalPx),
+      overlapTolerancePercent: String(nextSettings.overlapTolerancePercent),
     });
     setFloatingItems(
       createFloatingItems(
@@ -1369,6 +1422,7 @@ export function Slideshow() {
         {settings.minimumDissolveSeconds}〜
         {settings.maximumDissolveSeconds}秒・対角線
         {settings.minimumImageDiagonalPx}〜{settings.maximumImageDiagonalPx}px
+        ・重なり許容 {settings.overlapTolerancePercent}%
       </button>
 
       {isSettingsOpen && (
@@ -1565,13 +1619,29 @@ export function Slideshow() {
             </div>
           </fieldset>
 
-          <p className="settings-description">
-            「間隔」は画像の入れ替えが始まるまでの時間、「切替」は徐々に
-            消えたり現れたりする時間です。
-            <br />
-            サイズは画像の左下から右上までの距離です。画面に収まらない
-            場合だけ自動的に縮小します。
-          </p>
+          <fieldset className="settings-group">
+            <legend>重なり許容（%）</legend>
+            <label className="settings-label" htmlFor="overlap-tolerance">
+              許容値
+              <input
+                id="overlap-tolerance"
+                className="settings-input"
+                type="number"
+                min={MIN_CONFIGURABLE_OVERLAP_TOLERANCE_PERCENT}
+                max={MAX_CONFIGURABLE_OVERLAP_TOLERANCE_PERCENT}
+                step="1"
+                required
+                value={draftSettings.overlapTolerancePercent}
+                onChange={(event) =>
+                  setDraftSettings((currentSettings) => ({
+                    ...currentSettings,
+                    overlapTolerancePercent: event.target.value,
+                  }))
+                }
+              />
+            </label>
+          </fieldset>
+
           <button className="settings-submit" type="submit">
             反映する
           </button>

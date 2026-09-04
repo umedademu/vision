@@ -279,13 +279,6 @@ body {
   font: inherit;
 }
 
-.settings-description {
-  margin: 0.75rem 0;
-  color: rgb(255 255 255 / 75%);
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
-
 .settings-submit {
   width: 100%;
   padding: 0.55rem 0.7rem;
