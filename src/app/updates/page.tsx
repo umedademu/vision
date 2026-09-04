@@ -10,7 +10,15 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.014</h1>
+        <h1 className="updates-title">v0.015</h1>
+
+        <section className="updates-entry">
+          <h2>v0.015</h2>
+          <ul>
+            <li>PC画面でも画像以外の操作項目を通常時は非表示に変更</li>
+            <li>全画面で画面上部の操作による一時表示に統一</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.014</h2>

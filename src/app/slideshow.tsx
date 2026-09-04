@@ -71,7 +71,7 @@ const MAX_SWITCH_SECONDS_STORAGE_KEY = "vision-maximum-switch-seconds";
 const MIN_IMAGE_LONG_SIDE_STORAGE_KEY = "vision-minimum-image-long-side-px";
 const MAX_IMAGE_LONG_SIDE_STORAGE_KEY = "vision-maximum-image-long-side-px";
 const EDGE_GAP_PX = 8;
-const MOBILE_CONTROLS_VISIBLE_MS = 8_000;
+const CONTROLS_VISIBLE_MS = 8_000;
 
 function randomInteger(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -364,8 +364,7 @@ export function Slideshow() {
       maximumImageLongSidePx: String(DEFAULT_MAX_IMAGE_LONG_SIDE_PX),
     });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [areMobileControlsVisible, setAreMobileControlsVisible] =
-    useState(false);
+  const [areControlsVisible, setAreControlsVisible] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -575,7 +574,7 @@ export function Slideshow() {
 
   useEffect(() => {
     if (
-      !areMobileControlsVisible ||
+      !areControlsVisible ||
       isSettingsOpen ||
       isUploading
     ) {
@@ -583,18 +582,18 @@ export function Slideshow() {
     }
 
     const hideTimer = window.setTimeout(() => {
-      setAreMobileControlsVisible(false);
-    }, MOBILE_CONTROLS_VISIBLE_MS);
+      setAreControlsVisible(false);
+    }, CONTROLS_VISIBLE_MS);
 
     return () => window.clearTimeout(hideTimer);
-  }, [areMobileControlsVisible, isSettingsOpen, isUploading]);
+  }, [areControlsVisible, isSettingsOpen, isUploading]);
 
-  function handleMobileControlsToggle() {
-    if (areMobileControlsVisible) {
+  function handleControlsToggle() {
+    if (areControlsVisible) {
       setIsSettingsOpen(false);
     }
 
-    setAreMobileControlsVisible((areVisible) => !areVisible);
+    setAreControlsVisible((areVisible) => !areVisible);
   }
 
   function handleDisplaySettings(event: FormEvent<HTMLFormElement>) {
@@ -842,15 +841,15 @@ export function Slideshow() {
       )}
 
       <button
-        className="mobile-controls-trigger"
+        className="controls-trigger"
         type="button"
         aria-label={
-          areMobileControlsVisible
+          areControlsVisible
             ? "操作項目を隠す"
             : "操作項目を表示する"
         }
-        aria-expanded={areMobileControlsVisible}
-        onClick={handleMobileControlsToggle}
+        aria-expanded={areControlsVisible}
+        onClick={handleControlsToggle}
       />
 
       <input
@@ -862,8 +861,8 @@ export function Slideshow() {
         onChange={handleUpload}
       />
       <button
-        className={`upload-button mobile-hideable ${
-          areMobileControlsVisible ? "mobile-controls-visible" : ""
+        className={`upload-button controls-hideable ${
+          areControlsVisible ? "controls-visible" : ""
         }`}
         type="button"
         disabled={isUploading}
@@ -874,8 +873,8 @@ export function Slideshow() {
 
       {uploadMessage && (
         <p
-          className={`upload-message mobile-hideable ${
-            areMobileControlsVisible ? "mobile-controls-visible" : ""
+          className={`upload-message controls-hideable ${
+            areControlsVisible ? "controls-visible" : ""
           }`}
           role="status"
         >
@@ -884,8 +883,8 @@ export function Slideshow() {
       )}
 
       <button
-        className={`settings-button mobile-hideable ${
-          areMobileControlsVisible ? "mobile-controls-visible" : ""
+        className={`settings-button controls-hideable ${
+          areControlsVisible ? "controls-visible" : ""
         }`}
         type="button"
         aria-controls="display-settings"
@@ -901,8 +900,8 @@ export function Slideshow() {
       {isSettingsOpen && (
         <form
           id="display-settings"
-          className={`settings-panel mobile-hideable ${
-            areMobileControlsVisible ? "mobile-controls-visible" : ""
+          className={`settings-panel controls-hideable ${
+            areControlsVisible ? "controls-visible" : ""
           }`}
           onSubmit={handleDisplaySettings}
         >
@@ -1052,8 +1051,8 @@ export function Slideshow() {
       )}
 
       <Link
-        className={`updates-link mobile-hideable ${
-          areMobileControlsVisible ? "mobile-controls-visible" : ""
+        className={`updates-link controls-hideable ${
+          areControlsVisible ? "controls-visible" : ""
         }`}
         href="/updates"
       >
