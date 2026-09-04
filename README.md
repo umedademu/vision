@@ -2,7 +2,7 @@
 
 Cloudflare R2に保存した画像を、スクリーンセーバーのように5秒ごとにランダム表示するWebアプリ。
 
-現在のバージョン: `v0.003`
+現在のバージョン: `v0.004`
 
 Vercelへのデプロイを前提とした、Next.js App Router + TypeScript構成のプロジェクトです。
 
@@ -13,7 +13,7 @@ npm install
 Copy-Item .env.example .env.local
 ```
 
-`.env.local` にCloudflare R2の接続情報と、画像追加用の合言葉を設定してから起動します。
+`.env.local` にCloudflare R2の接続情報を設定してから起動します。
 
 ```bash
 npm run dev
@@ -37,6 +37,6 @@ src/
 
 R2バケットが未設定または空の場合は、画面中央に `vision` と表示します。
 
-トップページ左下の「画像を追加」から、対応画像を1枚25MBまで、複数まとめてR2へ保存できます。最初の追加時に `.env.local` の `UPLOAD_PASSWORD` に設定した合言葉を入力します。
+トップページ左下の「画像を追加」から、対応画像を1枚25MBまで、複数まとめてR2へ保存できます。
 
 トップページ右下の「更新情報」リンク、または `/updates` で更新履歴を確認できます。

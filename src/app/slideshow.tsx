@@ -89,17 +89,6 @@ export function Slideshow() {
       return;
     }
 
-    const savedPassword = window.sessionStorage.getItem(
-      "vision-upload-password",
-    );
-    const uploadPassword =
-      savedPassword ?? window.prompt("画像追加用の合言葉を入力してください。");
-
-    if (!uploadPassword) {
-      return;
-    }
-
-    window.sessionStorage.setItem("vision-upload-password", uploadPassword);
     setIsUploading(true);
 
     try {
@@ -114,17 +103,12 @@ export function Slideshow() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-upload-password": uploadPassword,
           },
           body: JSON.stringify({ contentType: file.type, size: file.size }),
         });
         const prepared = (await prepareResponse.json()) as UploadUrlResponse;
 
         if (!prepareResponse.ok || !prepared.uploadUrl || !prepared.key) {
-          if (prepareResponse.status === 401) {
-            window.sessionStorage.removeItem("vision-upload-password");
-          }
-
           throw new Error(prepared.error ?? "画像を追加できませんでした。");
         }
 

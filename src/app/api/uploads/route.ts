@@ -1,5 +1,3 @@
-import { timingSafeEqual } from "node:crypto";
-
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { NextResponse } from "next/server";
@@ -23,7 +21,6 @@ function getR2Config() {
     accessKeyId: process.env.R2_ACCESS_KEY_ID,
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
     bucketName: process.env.R2_BUCKET_NAME,
-    uploadPassword: process.env.UPLOAD_PASSWORD,
   };
 
   if (Object.values(config).some((value) => !value)) {
@@ -33,16 +30,6 @@ function getR2Config() {
   return config as Record<keyof typeof config, string>;
 }
 
-function passwordsMatch(received: string, expected: string) {
-  const receivedBuffer = Buffer.from(received);
-  const expectedBuffer = Buffer.from(expected);
-
-  return (
-    receivedBuffer.length === expectedBuffer.length &&
-    timingSafeEqual(receivedBuffer, expectedBuffer)
-  );
-}
-
 export async function POST(request: Request) {
   const config = getR2Config();
 
@@ -50,15 +37,6 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "画像を追加するための設定が完了していません。" },
       { status: 503 },
-    );
-  }
-
-  const uploadPassword = request.headers.get("x-upload-password") ?? "";
-
-  if (!passwordsMatch(uploadPassword, config.uploadPassword)) {
-    return NextResponse.json(
-      { error: "合言葉が正しくありません。" },
-      { status: 401 },
     );
   }
 
