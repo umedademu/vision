@@ -10,7 +10,14 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.001</h1>
+        <h1 className="updates-title">v0.002</h1>
+
+        <section className="updates-entry">
+          <h2>v0.002</h2>
+          <ul>
+            <li>トップページに更新情報ページへのリンクを追加</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.001</h2>

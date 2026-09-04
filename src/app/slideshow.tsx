@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type ImageItem = {
@@ -82,6 +83,10 @@ export function Slideshow() {
       ) : (
         <h1 className="slideshow-title">vision</h1>
       )}
+
+      <Link className="updates-link" href="/updates">
+        更新情報
+      </Link>
     </main>
   );
 }
