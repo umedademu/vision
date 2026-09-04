@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.018</h1>
+        <h1 className="updates-title">v0.019</h1>
+
+        <section className="updates-entry">
+          <h2>v0.019</h2>
+          <ul>
+            <li>表示枚数の増減時に全画像を並べ直す動きを廃止</li>
+            <li>枚数が増える場合は空いている場所へ1枚だけ追加</li>
+            <li>枚数が減る場合は既存画像の位置を変えずに1枚だけ削除</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.018</h2>

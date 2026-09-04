@@ -202,19 +202,11 @@ function createFloatingItems(
   viewportWidth: number,
   viewportHeight: number,
   settings: SlideshowSettings,
-  specifiedDisplayCount?: number,
 ) {
-  const displayCount =
-    specifiedDisplayCount === undefined
-      ? randomInteger(
-          settings.minimumDisplayCount,
-          settings.maximumDisplayCount,
-        )
-      : clamp(
-          specifiedDisplayCount,
-          settings.minimumDisplayCount,
-          settings.maximumDisplayCount,
-        );
+  const displayCount = randomInteger(
+    settings.minimumDisplayCount,
+    settings.maximumDisplayCount,
+  );
   const isMobile = viewportWidth <= 640;
   const layoutRatio = isMobile ? 3 / 4 : 4 / 3;
   const columns =
@@ -327,6 +319,124 @@ function getNextDisplayCount(
   return currentDisplayCount + (Math.random() < 0.5 ? -1 : 1);
 }
 
+function createAddedFloatingItem(
+  currentItems: FloatingItem[],
+  imageCount: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  settings: SlideshowSettings,
+) {
+  const nextDisplayCount = currentItems.length + 1;
+  const isMobile = viewportWidth <= 640;
+  const layoutRatio = isMobile ? 3 / 4 : 4 / 3;
+  const columns = Math.ceil(Math.sqrt(nextDisplayCount * layoutRatio));
+  const rows = Math.ceil(nextDisplayCount / columns);
+  const cellWidthPercent = 100 / columns;
+  const cellHeightPercent = 100 / rows;
+  const minimumDriftX = Math.min(1, Math.max(0.25, cellWidthPercent * 0.04));
+  const maximumDriftX = Math.min(2, Math.max(0.5, cellWidthPercent * 0.08));
+  const minimumDriftY = Math.min(1, Math.max(0.25, cellHeightPercent * 0.04));
+  const maximumDriftY = Math.min(2, Math.max(0.5, cellHeightPercent * 0.08));
+  const driftX = randomSignedNumber(minimumDriftX, maximumDriftX);
+  const driftY = randomSignedNumber(minimumDriftY, maximumDriftY);
+  const maximumSafeDiagonalPx = getMaximumSafeDiagonalPx(
+    viewportWidth,
+    viewportHeight,
+    cellWidthPercent,
+    cellHeightPercent,
+    driftX,
+    driftY,
+  );
+  const maximumRenderedDiagonalPx = Math.min(
+    settings.maximumImageDiagonalPx,
+    maximumSafeDiagonalPx,
+  );
+  const diagonalPx = Math.min(
+    randomInteger(
+      settings.minimumImageDiagonalPx,
+      settings.maximumImageDiagonalPx,
+    ),
+    maximumRenderedDiagonalPx,
+  );
+  const safeEdgeMargins = getSafeEdgeMargins(
+    viewportWidth,
+    viewportHeight,
+    driftX,
+    driftY,
+    maximumRenderedDiagonalPx,
+  );
+  let bestPosition = {
+    x: 50,
+    y: 50,
+    clearance: Number.NEGATIVE_INFINITY,
+  };
+
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const x =
+      safeEdgeMargins.x +
+      Math.random() * (100 - safeEdgeMargins.x * 2);
+    const y =
+      safeEdgeMargins.y +
+      Math.random() * (100 - safeEdgeMargins.y * 2);
+    const clearance = Math.min(
+      ...currentItems.map((item) => {
+        const horizontalDistancePx =
+          (Math.abs(x - item.x) / 100) * viewportWidth;
+        const verticalDistancePx =
+          (Math.abs(y - item.y) / 100) * viewportHeight;
+        const horizontalDriftPx =
+          ((Math.abs(driftX) + Math.abs(item.driftX)) / 100) *
+          viewportWidth;
+        const verticalDriftPx =
+          ((Math.abs(driftY) + Math.abs(item.driftY)) / 100) *
+          viewportHeight;
+        const closestHorizontalDistancePx = Math.max(
+          0,
+          horizontalDistancePx - horizontalDriftPx,
+        );
+        const closestVerticalDistancePx = Math.max(
+          0,
+          verticalDistancePx - verticalDriftPx,
+        );
+        const closestCenterDistancePx = Math.hypot(
+          closestHorizontalDistancePx,
+          closestVerticalDistancePx,
+        );
+        const allowedOverlapDistancePx =
+          (maximumRenderedDiagonalPx / 2 + item.diagonalPx / 2) * 0.7;
+
+        return closestCenterDistancePx - allowedOverlapDistancePx;
+      }),
+    );
+
+    if (clearance > bestPosition.clearance) {
+      bestPosition = { x, y, clearance };
+    }
+  }
+
+  const floatDurationMs = randomInteger(7_000, 15_000);
+
+  return {
+    id: `${Date.now()}-added-${Math.random()}`,
+    imageIndex: chooseNextIndex(
+      -1,
+      imageCount,
+      currentItems.map((item) => item.imageIndex),
+    ),
+    x: bestPosition.x,
+    y: bestPosition.y,
+    diagonalPx,
+    maximumSafeDiagonalPx: maximumRenderedDiagonalPx,
+    diagonalScale: 1,
+    driftX,
+    driftY,
+    floatDurationMs,
+    floatDelayMs: -randomInteger(0, floatDurationMs),
+    rotation: randomSignedInteger(1, 4),
+    layer: randomInteger(1, 5),
+  } satisfies FloatingItem;
+}
+
 function changeFloatingItem(
   currentItems: FloatingItem[],
   changingItemId: string,
@@ -343,97 +453,55 @@ function changeFloatingItem(
     return currentItems;
   }
 
-  const changingItem = currentItems[changingItemIndex];
-  const nextImageIndex = chooseNextIndex(
-    changingItem.imageIndex,
-    imageCount,
-    currentItems.map((item) => item.imageIndex),
-  );
   const nextDisplayCount = getNextDisplayCount(
     currentItems.length,
     settings.minimumDisplayCount,
     settings.maximumDisplayCount,
   );
-
-  if (nextDisplayCount === currentItems.length) {
-    const nextItems = [...currentItems];
-    nextItems[changingItemIndex] = {
-      ...changingItem,
-      imageIndex: nextImageIndex,
-      diagonalPx: Math.min(
-        randomInteger(
-          settings.minimumImageDiagonalPx,
-          settings.maximumImageDiagonalPx,
-        ),
-        changingItem.maximumSafeDiagonalPx,
-      ),
-      diagonalScale: 1,
-    };
-    return nextItems;
-  }
-
-  const retainedItems = currentItems.map((item) =>
+  const changedItems = currentItems.map((item) =>
     item.id === changingItemId
       ? {
           ...item,
-          imageIndex: nextImageIndex,
+          imageIndex: chooseNextIndex(
+            item.imageIndex,
+            imageCount,
+            currentItems.map((visibleItem) => visibleItem.imageIndex),
+          ),
+          diagonalPx: Math.min(
+            randomInteger(
+              settings.minimumImageDiagonalPx,
+              settings.maximumImageDiagonalPx,
+            ),
+            item.maximumSafeDiagonalPx,
+          ),
           diagonalScale: 1,
         }
       : item,
   );
 
   if (nextDisplayCount < currentItems.length) {
-    const removableIndexes = retainedItems
+    const removableIndexes = changedItems
       .map((_, index) => index)
       .filter((index) => index !== changingItemIndex);
     const removeIndex =
       removableIndexes[randomInteger(0, removableIndexes.length - 1)];
-    retainedItems.splice(removeIndex, 1);
+    return changedItems.filter((_, index) => index !== removeIndex);
   }
 
-  const layoutItems = createFloatingItems(
-    imageCount,
-    viewportWidth,
-    viewportHeight,
-    settings,
-    nextDisplayCount,
-  );
+  if (nextDisplayCount > currentItems.length) {
+    return [
+      ...changedItems,
+      createAddedFloatingItem(
+        changedItems,
+        imageCount,
+        viewportWidth,
+        viewportHeight,
+        settings,
+      ),
+    ];
+  }
 
-  return layoutItems.map((layoutItem, index) => {
-    const retainedItem = retainedItems[index];
-
-    if (!retainedItem) {
-      return {
-        ...layoutItem,
-        imageIndex: chooseNextIndex(
-          -1,
-          imageCount,
-          retainedItems.map((item) => item.imageIndex),
-        ),
-      };
-    }
-
-    const isChangingItem = retainedItem.id === changingItemId;
-
-    return {
-      ...layoutItem,
-      id: retainedItem.id,
-      imageIndex: retainedItem.imageIndex,
-      diagonalPx: isChangingItem
-        ? Math.min(
-            randomInteger(
-              settings.minimumImageDiagonalPx,
-              settings.maximumImageDiagonalPx,
-            ),
-            layoutItem.maximumSafeDiagonalPx,
-          )
-        : Math.min(
-            retainedItem.diagonalPx,
-            layoutItem.maximumSafeDiagonalPx,
-          ),
-      diagonalScale: retainedItem.diagonalScale,
-    };
-  });
+  return changedItems;
 }
 
 function chooseNextIndex(
