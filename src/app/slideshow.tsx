@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, useEffect, useRef, useState } from "react";
+import type { ChangeEvent, CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type ImageItem = {
   key: string;
@@ -18,12 +19,32 @@ type UploadUrlResponse = {
   uploadUrl?: string;
 };
 
-const DISPLAY_SLOT_COUNT = 12;
+type FloatingItem = {
+  id: string;
+  imageIndex: number;
+  x: number;
+  y: number;
+  sizePercent: number;
+  driftX: number;
+  driftY: number;
+  floatDurationMs: number;
+  floatDelayMs: number;
+  rotation: number;
+  layer: number;
+};
+
+const MIN_DISPLAY_COUNT = 8;
+const MAX_DISPLAY_COUNT = 12;
 const MIN_DISPLAY_INTERVAL_MS = 5_000;
 const MAX_DISPLAY_INTERVAL_MS = 10_000;
 
 function randomInteger(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function randomSignedInteger(min: number, max: number) {
+  const value = randomInteger(min, max);
+  return Math.random() < 0.5 ? -value : value;
 }
 
 function shuffleIndexes(imageCount: number) {
@@ -40,26 +61,50 @@ function shuffleIndexes(imageCount: number) {
   return indexes;
 }
 
-function createInitialIndexes(imageCount: number) {
+function createInitialIndexes(imageCount: number, displayCount: number) {
   if (imageCount === 0) {
     return [];
   }
 
   const indexes: number[] = [];
 
-  while (indexes.length < DISPLAY_SLOT_COUNT) {
+  while (indexes.length < displayCount) {
     const shuffled = shuffleIndexes(imageCount);
 
     for (const index of shuffled) {
       indexes.push(index);
 
-      if (indexes.length === DISPLAY_SLOT_COUNT) {
+      if (indexes.length === displayCount) {
         break;
       }
     }
   }
 
   return indexes;
+}
+
+function createFloatingItems(imageCount: number) {
+  const displayCount = randomInteger(MIN_DISPLAY_COUNT, MAX_DISPLAY_COUNT);
+
+  return createInitialIndexes(imageCount, displayCount).map(
+    (imageIndex, slotIndex) => {
+      const floatDurationMs = randomInteger(7_000, 15_000);
+
+      return {
+        id: `${Date.now()}-${slotIndex}-${Math.random()}`,
+        imageIndex,
+        x: randomInteger(16, 84),
+        y: randomInteger(12, 88),
+        sizePercent: randomInteger(80, 100),
+        driftX: randomSignedInteger(15, 45),
+        driftY: randomSignedInteger(12, 36),
+        floatDurationMs,
+        floatDelayMs: -randomInteger(0, floatDurationMs),
+        rotation: randomSignedInteger(1, 4),
+        layer: randomInteger(1, 5),
+      } satisfies FloatingItem;
+    },
+  );
 }
 
 function chooseNextIndex(
@@ -71,9 +116,10 @@ function chooseNextIndex(
     return currentIndex;
   }
 
-  const otherIndexes = Array.from({ length: imageCount }, (_, index) => index).filter(
-    (index) => index !== currentIndex,
-  );
+  const otherIndexes = Array.from(
+    { length: imageCount },
+    (_, index) => index,
+  ).filter((index) => index !== currentIndex);
   const unusedIndexes = otherIndexes.filter(
     (index) => !visibleIndexes.includes(index),
   );
@@ -106,7 +152,7 @@ async function fetchImages(signal?: AbortSignal) {
 
 export function Slideshow() {
   const [images, setImages] = useState<ImageItem[]>([]);
-  const [visibleIndexes, setVisibleIndexes] = useState<number[]>([]);
+  const [floatingItems, setFloatingItems] = useState<FloatingItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -116,7 +162,7 @@ export function Slideshow() {
     void fetchImages(controller.signal).then((loadedImages) => {
       if (loadedImages) {
         setImages(loadedImages);
-        setVisibleIndexes(createInitialIndexes(loadedImages.length));
+        setFloatingItems(createFloatingItems(loadedImages.length));
       }
     });
 
@@ -124,7 +170,7 @@ export function Slideshow() {
   }, []);
 
   useEffect(() => {
-    if (images.length < 2 || visibleIndexes.length === 0) {
+    if (images.length < 2 || floatingItems.length === 0) {
       return;
     }
 
@@ -132,25 +178,35 @@ export function Slideshow() {
 
     function scheduleChange(slotIndex: number) {
       timers[slotIndex] = window.setTimeout(() => {
-        setVisibleIndexes((currentIndexes) => {
-          const nextIndexes = [...currentIndexes];
-          nextIndexes[slotIndex] = chooseNextIndex(
-            currentIndexes[slotIndex],
-            images.length,
-            currentIndexes,
-          );
-          return nextIndexes;
+        setFloatingItems((currentItems) => {
+          const currentItem = currentItems[slotIndex];
+
+          if (!currentItem) {
+            return currentItems;
+          }
+
+          const nextItems = [...currentItems];
+          nextItems[slotIndex] = {
+            ...currentItem,
+            imageIndex: chooseNextIndex(
+              currentItem.imageIndex,
+              images.length,
+              currentItems.map((item) => item.imageIndex),
+            ),
+            sizePercent: randomInteger(80, 100),
+          };
+          return nextItems;
         });
         scheduleChange(slotIndex);
       }, randomInteger(MIN_DISPLAY_INTERVAL_MS, MAX_DISPLAY_INTERVAL_MS));
     }
 
-    for (let slotIndex = 0; slotIndex < DISPLAY_SLOT_COUNT; slotIndex += 1) {
+    for (let slotIndex = 0; slotIndex < floatingItems.length; slotIndex += 1) {
       scheduleChange(slotIndex);
     }
 
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [images.length, visibleIndexes.length]);
+  }, [images.length, floatingItems.length]);
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const selectedFiles = Array.from(event.target.files ?? []);
@@ -199,16 +255,16 @@ export function Slideshow() {
       const refreshedImages = await fetchImages();
       if (refreshedImages) {
         setImages(refreshedImages);
-        const nextIndexes = createInitialIndexes(refreshedImages.length);
+        const nextItems = createFloatingItems(refreshedImages.length);
         const uploadedIndex = refreshedImages.findIndex(
           (image) => image.key === lastUploadedKey,
         );
 
-        if (uploadedIndex >= 0) {
-          nextIndexes[0] = uploadedIndex;
+        if (uploadedIndex >= 0 && nextItems[0]) {
+          nextItems[0] = { ...nextItems[0], imageIndex: uploadedIndex };
         }
 
-        setVisibleIndexes(nextIndexes);
+        setFloatingItems(nextItems);
       }
 
       setUploadMessage(`${selectedFiles.length}枚の画像を追加しました。`);
@@ -223,21 +279,44 @@ export function Slideshow() {
 
   return (
     <main className="slideshow">
-      {visibleIndexes.length > 0 ? (
-        <div className="slideshow-grid">
-          {visibleIndexes.map((imageIndex, slotIndex) => {
-            const image = images[imageIndex];
+      {floatingItems.length > 0 ? (
+        <div className="floating-stage">
+          {floatingItems.map((item) => {
+            const image = images[item.imageIndex];
+            const floatingStyle = {
+              left: `${item.x}%`,
+              top: `${item.y}%`,
+              zIndex: item.layer,
+              "--drift-x-start": `${-item.driftX}px`,
+              "--drift-y-start": `${-item.driftY}px`,
+              "--drift-x": `${item.driftX}px`,
+              "--drift-y": `${item.driftY}px`,
+              "--float-duration": `${item.floatDurationMs}ms`,
+              "--float-delay": `${item.floatDelayMs}ms`,
+              "--rotation-start": `${-item.rotation}deg`,
+              "--rotation": `${item.rotation}deg`,
+            } as CSSProperties;
 
             return (
-              <div className="slideshow-tile" key={slotIndex}>
-                {/* R2の署名付きURLをブラウザから直接読み込みます。 */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  key={image.key}
-                  className="slideshow-image"
-                  src={image.url}
-                  alt=""
-                />
+              <div
+                className="floating-slot"
+                key={item.id}
+                style={floatingStyle}
+              >
+                <div className="floating-motion">
+                  {/* R2の署名付きURLをブラウザから直接読み込みます。 */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    key={image.key}
+                    className="slideshow-image"
+                    src={image.url}
+                    alt=""
+                    style={{
+                      width: `${item.sizePercent}%`,
+                      height: `${item.sizePercent}%`,
+                    }}
+                  />
+                </div>
               </div>
             );
           })}

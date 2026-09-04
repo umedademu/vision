@@ -10,7 +10,16 @@ export default function UpdatesPage() {
     <main className="updates-page">
       <div className="updates-content">
         <p className="updates-label">現在のバージョン</p>
-        <h1 className="updates-title">v0.005</h1>
+        <h1 className="updates-title">v0.006</h1>
+
+        <section className="updates-entry">
+          <h2>v0.006</h2>
+          <ul>
+            <li>同時表示する画像数を8〜12枚から毎回ランダムに決定</li>
+            <li>画像全体が見える、宙を漂うような表示へ変更</li>
+            <li>各画像の大きさを80〜100%の範囲でランダム化</li>
+          </ul>
+        </section>
 
         <section className="updates-entry">
           <h2>v0.005</h2>
