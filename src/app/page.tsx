@@ -1,5 +1,7 @@
-import { ScreensaverStage } from "@/features/screensaver";
-
 export default function Home() {
-  return <ScreensaverStage />;
+  return (
+    <main>
+      <h1>vision</h1>
+    </main>
+  );
 }

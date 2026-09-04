@@ -19,3 +19,20 @@ body {
 body {
   background: #000;
 }
+
+main {
+  display: grid;
+  width: 100%;
+  min-height: 100svh;
+  place-items: center;
+  overflow: hidden;
+  color: #fff;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(3rem, 12vw, 9rem);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}

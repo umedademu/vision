@@ -16,11 +16,9 @@ npm run dev
 ## ディレクトリ構成
 
 ```text
-public/
-  images/                         表示する画像などの静的ファイル
 src/
-  app/                            ルーティングとアプリ全体の設定
-  features/
-    screensaver/                  スクリーンセーバー機能
-      components/                 機能固有のUIコンポーネント
+  app/
+    globals.css                   全体のスタイル
+    layout.tsx                    共通レイアウト
+    page.tsx                      トップページ
 ```
